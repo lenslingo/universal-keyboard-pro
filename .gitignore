@@ -1,0 +1,14 @@
+# build outputs
+**/bin/
+**/obj/
+**/build/
+dist/
+android/.gradle/
+android/local.properties
+android/app/schemas/
+*.apk
+*.aab
+# secrets — never commit
+*.jks
+*.keystore
+*.pfx

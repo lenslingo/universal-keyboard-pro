@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- explicit usings: WPF + WinForms implicit usings collide (Clipboard, Application, ...) -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>UKPro</AssemblyName>
+    <RootNamespace>UKPro.Desktop</RootNamespace>
+    <ApplicationIcon>Assets\ukpro.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.2.0</Version>
+    <Product>Universal Keyboard Pro</Product>
+    <Company>UK Pro</Company>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UKPro.Core\UKPro.Core.csproj" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\ukpro.ico" />
+  </ItemGroup>
+</Project>

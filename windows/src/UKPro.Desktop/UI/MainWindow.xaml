@@ -1,0 +1,174 @@
+<Window x:Class="UKPro.Desktop.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Universal Keyboard Pro" Width="1000" Height="660" MinWidth="820" MinHeight="520"
+        Background="{StaticResource Bg}" WindowStartupLocation="CenterScreen" Icon="/Assets/ukpro.ico">
+  <DockPanel Margin="12">
+    <!-- header -->
+    <Grid DockPanel.Dock="Top" Margin="8,4,8,8">
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <TextBlock Text="Universal Keyboard Pro" Style="{StaticResource H1}"/>
+        <Border x:Name="StatusPill" CornerRadius="10" Padding="10,3" Margin="14,0,0,0" Background="#1E3A2E" VerticalAlignment="Center">
+          <TextBlock x:Name="StatusText" Text="Ready" Foreground="{StaticResource Ok}" FontSize="12" FontWeight="SemiBold"/>
+        </Border>
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <Button x:Name="PauseButton" Content="⏸ Pause" Click="OnPause" Background="{StaticResource Warn}"/>
+      </StackPanel>
+    </Grid>
+
+    <TabControl x:Name="Tabs" Background="Transparent" BorderThickness="0">
+      <!-- HOME -->
+      <TabItem Header="Home">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <UniformGrid Columns="2">
+            <Border Style="{StaticResource CardBorder}">
+              <StackPanel>
+                <TextBlock Text="CONNECTION" Style="{StaticResource H2}"/>
+                <TextBlock x:Name="ConnText" Style="{StaticResource Value}" Text="No phone connected"/>
+                <TextBlock x:Name="ConnDetail" Style="{StaticResource Muted}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource CardBorder}">
+              <StackPanel>
+                <TextBlock Text="KEYBOARD" Style="{StaticResource H2}"/>
+                <CheckBox x:Name="A2W" Content="Phone keyboard → this PC" Click="OnDirections"/>
+                <CheckBox x:Name="W2A" Content="This PC's keyboard → phone (mirroring)" Click="OnDirections"/>
+                <TextBlock x:Name="KbDetail" Style="{StaticResource Muted}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource CardBorder}">
+              <StackPanel>
+                <TextBlock Text="CLIPBOARD" Style="{StaticResource H2}"/>
+                <CheckBox x:Name="ClipSync" Content="Sync text, images and files" Click="OnClipSync"/>
+                <TextBlock x:Name="ClipDetail" Style="{StaticResource Muted}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource CardBorder}">
+              <StackPanel>
+                <TextBlock Text="FILE TRANSFER" Style="{StaticResource H2}"/>
+                <TextBlock x:Name="FileDetail" Style="{StaticResource Value}" Text="Idle"/>
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                  <Button Content="Send file to phone…" Click="OnSendFile"/>
+                  <Button Content="Open downloads" Style="{StaticResource Secondary}" Click="OnOpenDownloads"/>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </UniformGrid>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- DEVICES -->
+      <TabItem Header="Devices">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="360"/></Grid.ColumnDefinitions>
+          <Border Style="{StaticResource CardBorder}">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+                <Button Content="Use as keyboard target" Click="OnSetTarget"/>
+                <Button Content="Forget device" Style="{StaticResource Secondary}" Click="OnForget"/>
+              </StackPanel>
+              <TextBlock DockPanel.Dock="Top" Text="PAIRED PHONES" Style="{StaticResource H2}"/>
+              <ListView x:Name="DevicesList" DisplayMemberPath="Display"/>
+            </DockPanel>
+          </Border>
+          <Border Grid.Column="1" Style="{StaticResource CardBorder}">
+            <StackPanel>
+              <TextBlock Text="PAIR A NEW PHONE" Style="{StaticResource H2}"/>
+              <Border Background="White" CornerRadius="8" Padding="8" HorizontalAlignment="Center" Width="236" Height="236">
+                <Image x:Name="QrImage" Stretch="Uniform"/>
+              </Border>
+              <TextBlock x:Name="PairCode" FontSize="26" FontFamily="Consolas" HorizontalAlignment="Center" Margin="0,10,0,0"/>
+              <TextBlock x:Name="PairInfo" Style="{StaticResource Muted}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,4,0,8"/>
+              <Button Content="Show new pairing code" Click="OnNewPairing" HorizontalAlignment="Center"/>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </TabItem>
+
+      <!-- CLIPBOARD HISTORY -->
+      <TabItem Header="Clipboard">
+        <Border Style="{StaticResource CardBorder}">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+              <Button Content="Copy again" Click="OnHistoryCopy"/>
+              <Button Content="Copy &amp; paste" Click="OnHistoryPaste"/>
+              <Button Content="Pin / unpin" Style="{StaticResource Secondary}" Click="OnHistoryPin"/>
+              <Button Content="Delete" Style="{StaticResource Secondary}" Click="OnHistoryDelete"/>
+              <Button Content="Clear (keep pinned)" Style="{StaticResource Secondary}" Click="OnHistoryClear"/>
+            </StackPanel>
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+              <TextBlock Text="SEARCH" Style="{StaticResource H2}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+              <TextBox x:Name="HistorySearch" TextChanged="OnHistorySearch"/>
+            </DockPanel>
+            <ListView x:Name="HistoryList" DisplayMemberPath="Display"/>
+          </DockPanel>
+        </Border>
+      </TabItem>
+
+      <!-- FILES -->
+      <TabItem Header="Files">
+        <Border Style="{StaticResource CardBorder}">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+              <Button Content="Send file…" Click="OnSendFile"/>
+              <Button Content="Pause / resume" Style="{StaticResource Secondary}" Click="OnTransferPause"/>
+              <Button Content="Cancel" Style="{StaticResource Secondary}" Click="OnTransferCancel"/>
+            </StackPanel>
+            <TextBlock DockPanel.Dock="Top" Text="TRANSFERS" Style="{StaticResource H2}"/>
+            <ListView x:Name="TransfersList" DisplayMemberPath="Display"/>
+          </DockPanel>
+        </Border>
+      </TabItem>
+
+      <!-- REMOTE TEXT PANEL -->
+      <TabItem Header="Remote text">
+        <Border Style="{StaticResource CardBorder}">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Text="TYPE HERE — TEXT IS SENT TO THE PHONE WHEN COMMITTED (ENTER)" Style="{StaticResource H2}"/>
+            <TextBlock DockPanel.Dock="Top" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"
+                       Text="Works with every language and every Windows input method — Bangla (Avro, Bijoy, Bengali Phonetic), Hindi, Urdu, Arabic, Chinese (Pinyin), Japanese, Korean, Vietnamese (Telex), Thai, Tamil… Windows commits the composed text to this box and UK Pro sends exactly that text, never half-composed input. Shift+Enter inserts a new line."/>
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+              <Button Content="Send to phone (Enter)" Click="OnRemoteSend"/>
+              <CheckBox x:Name="RemoteLive" Content="Send each committed word immediately" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBox x:Name="RemoteBox" AcceptsReturn="False" TextWrapping="Wrap" FontSize="20" VerticalContentAlignment="Top"
+                     PreviewKeyDown="OnRemoteKey" PreviewTextInput="OnRemoteTextInput"/>
+          </DockPanel>
+        </Border>
+      </TabItem>
+
+      <!-- SETTINGS -->
+      <TabItem Header="Settings">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <Border Style="{StaticResource CardBorder}">
+              <StackPanel>
+                <TextBlock Text="GENERAL" Style="{StaticResource H2}"/>
+                <CheckBox x:Name="SetAutostart" Content="Start with Windows (tray)"/>
+                <CheckBox x:Name="SetRemote" Content="Allow Remote Control Panel (Alt+Tab, Win+D, volume, media)"/>
+                <CheckBox x:Name="SetImages" Content="Sync clipboard images"/>
+                <CheckBox x:Name="SetFiles" Content="Sync copied files"/>
+                <CheckBox x:Name="SetHistory" Content="Keep clipboard history (encrypted, this PC only)"/>
+                <TextBlock Text="Download folder" Style="{StaticResource Muted}" Margin="0,8,0,2"/>
+                <TextBox x:Name="SetDownload"/>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource CardBorder}">
+              <StackPanel>
+                <TextBlock Text="PRIVACY — KEYBOARD MIRRORING" Style="{StaticResource H2}"/>
+                <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
+                           Text="Keystrokes are never forwarded from password fields, the secure desktop (UAC, lock screen), or the apps below. Keystrokes are not logged or stored."/>
+                <TextBlock Text="Never forward from these apps (one .exe per line)" Style="{StaticResource Muted}" Margin="0,8,0,2"/>
+                <TextBox x:Name="SetExcluded" AcceptsReturn="True" Height="90" VerticalScrollBarVisibility="Auto"/>
+                <TextBlock Text="Trusted apps (forward even when UI Automation cannot identify the field)" Style="{StaticResource Muted}" Margin="0,8,0,2"/>
+                <TextBox x:Name="SetTrusted" AcceptsReturn="True" Height="90" VerticalScrollBarVisibility="Auto"/>
+              </StackPanel>
+            </Border>
+            <Button Content="Save settings" Click="OnSaveSettings" HorizontalAlignment="Left" Margin="8"/>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
+</Window>

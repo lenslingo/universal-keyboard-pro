@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">UK Pro</string>
+    <string name="ime_name">UK Pro Desktop Keyboard</string>
+    <string name="share_to_pc">Send to PC (UK Pro)</string>
+</resources>
