@@ -82,12 +82,16 @@ private val Accent = Color(0xFF5CC8FF)
 private val Warm = Color(0xFFFFB040)
 
 class MainActivity : ComponentActivity() {
-    private val notifPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private val permissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         UkRuntime.init(this)
-        if (Build.VERSION.SDK_INT >= 33) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        val wanted = buildList {
+            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+            if (Build.VERSION.SDK_INT == 29) add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+        if (wanted.isNotEmpty()) permissions.launch(wanted.toTypedArray())
         if (UkRuntime.secrets.hubs().isNotEmpty()) ConnectionService.start(this)
         setContent { UkTheme { App() } }
     }

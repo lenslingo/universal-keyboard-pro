@@ -39,7 +39,11 @@ object CoreTests {
             "file: corruption detected" to ::fileCorrupt,
             "file: safe names" to ::safeNames,
             "pairing offer URI parsing" to ::offerParse,
-            "keycodes: Android mapping & text rule" to ::keyCodes)
+            "keycodes: Android mapping & text rule" to ::keyCodes,
+            "Korean Hangul composer (한국어, 값, 앉아, 의사)" to ::hangul,
+            "Japanese romaji → kana (こんにちは, きょう, がっこう, カタカナ)" to ::kana,
+            "Vietnamese Telex (Tiếng Việt, đường, hoà, người)" to ::telex,
+            "Indic offset mapping (Devanagari → Gujarati, Tamil, Bengali …)" to ::indic)
         var failed = 0
         for ((name, body) in tests) {
             val t0 = System.nanoTime()
@@ -238,6 +242,50 @@ object CoreTests {
             "&id=win-1&n=My%20Laptop&c=ABCD1234&pk=BBBB")
         eq(listOf("192.168.1.5", "10.0.0.2"), o.hosts); eq("My Laptop", o.hubName); eq(47821, o.port)
         throws<IllegalArgumentException> { PairingOffer.parse("https://evil") }
+    }
+
+    private fun type(c: Composer, keys: String): String {
+        val sb = StringBuilder()
+        for (k in keys) sb.append(c.input(k.toString()))
+        sb.append(c.flush())
+        return sb.toString()
+    }
+
+    private fun hangul() {
+        eq("한국어", type(HangulComposer(), "ㅎㅏㄴㄱㅜㄱㅇㅓ"))
+        eq("값", type(HangulComposer(), "ㄱㅏㅂㅅ"))           // ㅄ final
+        eq("앉아", type(HangulComposer(), "ㅇㅏㄴㅈㅇㅏ"))
+        eq("안자", type(HangulComposer(), "ㅇㅏㄴㅈㅏ"))       // ㄵ splits when a vowel follows
+        eq("의사", type(HangulComposer(), "ㅇㅡㅣㅅㅏ"))       // ㅡ+ㅣ = ㅢ
+        val h = HangulComposer(); h.input("ㄱ"); h.input("ㅏ"); h.input("ㄴ")
+        eq("간", h.composing); check(h.backspace()); eq("가", h.composing)
+        eq("가 ", h.input(" "))
+    }
+
+    private fun kana() {
+        eq("こんにちは", type(KanaComposer(), "konnnichiha"))
+        eq("きょう", type(KanaComposer(), "kyou"))
+        eq("がっこう", type(KanaComposer(), "gakkou"))
+        eq("しんぶん", type(KanaComposer(), "shinbun"))
+        eq("カタカナ", type(KanaComposer(katakana = true), "katakana"))
+        eq("ありがとう。", type(KanaComposer(), "arigatou."))
+    }
+
+    private fun telex() {
+        eq("Tiếng", type(TelexComposer(), "Tieesng"))
+        eq("Việt", type(TelexComposer(), "Vieejt"))
+        eq("đường", type(TelexComposer(), "dduwowngf"))
+        eq("hoà", type(TelexComposer(), "hoaf"))
+        eq("người", type(TelexComposer(), "nguwowif"))
+        eq("mẹ", type(TelexComposer(), "mej"))
+    }
+
+    private fun indic() {
+        eq("ક", IndicScripts.fromDevanagari("क", IndicScripts.GUJARATI))
+        eq("க", IndicScripts.fromDevanagari("क", IndicScripts.TAMIL))
+        eq(null, IndicScripts.fromDevanagari("ख", IndicScripts.TAMIL)) // Tamil has no kha
+        eq("ক্ষ", IndicScripts.fromDevanagari("क्ष", IndicScripts.BENGALI))
+        eq("ਨ।", IndicScripts.fromDevanagari("न।", IndicScripts.GURMUKHI))
     }
 
     private fun keyCodes() {

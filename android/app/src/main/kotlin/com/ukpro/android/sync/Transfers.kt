@@ -64,8 +64,32 @@ class Transfers(private val context: Context) {
         when {
             p.purpose == "clipboard" -> UkRuntime.clipboard.onTransferDone(p.transferId, f)
             p.purpose.startsWith("clipboard-file:") -> UkRuntime.clipboard.onClipFileDone(p.purpose.removePrefix("clipboard-file:"), f)
-            else -> UkRuntime.io.execute { saveToDownloads(conn, f) }
+            else -> UkRuntime.io.execute { publish(conn, f) }
         }
+    }
+
+    /**
+     * Where received files are written. Android 11+: straight into the public Download/UK Pro folder
+     * (allowed without permission for files the app creates), so a 50 GB video needs no second copy
+     * and no space in the small app cache. Android 10: the same with the legacy storage permission,
+     * otherwise the app's own external folder followed by a MediaStore copy.
+     */
+    fun incomingDir(): File {
+        val public = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "UK Pro")
+        val direct = android.os.Build.VERSION.SDK_INT >= 30 || context.checkSelfPermission(
+            android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (direct && (public.isDirectory || public.mkdirs()) && public.canWrite()) return public
+        return File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir, "incoming").apply { mkdirs() }
+    }
+
+    private fun publish(conn: HubConnection, f: File) {
+        val publicDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "UK Pro")
+        if (f.parentFile?.absolutePath == publicDir.absolutePath) {
+            // already in Downloads: just index it so Files / Gallery / other apps see it
+            android.media.MediaScannerConnection.scanFile(context, arrayOf(f.absolutePath), arrayOf(MimeTypes.fromName(f.name))) { _, uri ->
+                notifyReceived(conn.name, f.name, uri ?: uriFor(f), MimeTypes.fromName(f.name))
+            }
+        } else saveToDownloads(conn, f)
     }
 
     private fun saveToDownloads(conn: HubConnection, f: File) {

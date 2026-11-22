@@ -32,12 +32,17 @@ Several phones can pair with one laptop, and one phone with several laptops.
 * **PC → phone (mirroring)**: laptop tray → *PC keyboard → Phone*. An orange bar at the top of the
   screen shows while mirroring and has a **Pause** button. Keys go to the phone's focused text field
   and still type normally on the PC.
-* **Languages**: the 🌐 key cycles through the layouts ticked in *Keyboard → Languages*:
-  English (long-press for á ç ñ ü ß …), বাংলা, हिन्दी, اردو, العربية, Русский, Ελληνικά.
-  Bangla/Hindi conjuncts = consonant + `q` (্ / ्) + consonant. Shortcuts like Ctrl+C work in every layout.
-* **Any other language** (中文, 日本語, 한국어, ไทย, தமிழ் …): phone menu → **Universal text**, switch to
-  any keyboard installed on your phone and type; on the laptop use the **Remote text** tab with any
-  Windows input method (Avro, Bijoy, Pinyin, Japanese IME…). Copy & paste works for every language.
+* **Move / resize the keyboard**: tap **⇕** on the keyboard toolbar → drag the bar up/down, or use
+  ▲ ▼ (move), A− A+ (key height), Narrower/Wider and ⇤ ⇔ ⇥ (one-handed left / centre / right).
+  The same settings are in *Keyboard → Appearance*. Reset restores the default.
+* **Languages (≈40 layouts)**: *Keyboard → Languages* — tick the ones you use; the 🌐 key cycles through them.
+  Latin (English, Español, Português, Français AZERTY, Deutsch QWERTZ, Italiano, Türkçe, Polski, …, Tiếng Việt Telex),
+  বাংলা, हिन्दी, मराठी, नेपाली, ਪੰਜਾਬੀ, ગુજરાતી, ଓଡ଼ିଆ, தமிழ், తెలుగు, ಕನ್ನಡ, മലയാളം, اردو, العربية, فارسی, עברית,
+  Русский, Українська, Қазақша, Српски, Ελληνικά, ქართული, Հայերեն, ไทย, 한국어 (jamo → syllables), 日本語 (romaji → kana).
+  Korean/Japanese/Vietnamese text is shown underlined while composing and goes to the PC only when committed.
+  Indic conjuncts = consonant + `q` (্ / ् …) + consonant. Long-press keys for accents and extra letters.
+* **Any other language** (Chinese, Japanese kanji …): phone menu → **Universal text** with any keyboard
+  installed on your phone; on the laptop the **Remote text** tab with any Windows input method.
 * Modifiers: tap once = next key only, double-tap = lock, or hold with one finger.
 * **Nav** shows Insert/Home/End/PgUp/PgDn/arrows and the numeric keypad.
 
@@ -54,7 +59,7 @@ Files copied on the phone can be pasted in Explorer; on the phone, apps that can
 **Open / Share** in the notification.
 
 ### Files
-Phone: *File Transfer* → Choose files, or the Share sheet → **Send to PC (UK Pro)**. Laptop: *Send file
+No size limit on Wi-Fi — only free storage space (checked before a transfer starts). Phone: *File Transfer* → Choose files, or the Share sheet → **Send to PC (UK Pro)**. Laptop: *Send file
 to phone…*. Phone saves to *Downloads/UK Pro*; laptop to *Downloads\UK Pro*. Transfers resume after
 a dropped connection and are SHA-256 verified.
 

@@ -68,31 +68,123 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
 
     // ------------------------------------------------------------------ views
 
+    private lateinit var root: LinearLayout
+    private lateinit var adjustPanel: LinearLayout
+    private lateinit var keyboardHolder: android.widget.FrameLayout
+    private lateinit var bottomSpacer: View
+    private var navInset = 0
+    private var liveOffsetDp = -1 // while dragging, before it is saved
+    /** Korean / Japanese / Vietnamese: text stays composing (underlined) until committed; only commits go to the PC. */
+    private var composer: com.ukpro.core.Composer? = null
+    private var composerLang: String? = null
+
     override fun onCreateInputView(): View {
         val s = UkRuntime.settings.current
         val bg = if (s.darkTheme) 0xFF0F1320.toInt() else 0xFFD5D9E2.toInt()
         val fg = if (s.darkTheme) 0xFFE8ECF8.toInt() else 0xFF1B2133.toInt()
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(bg) }
-        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(6), dp(4), dp(6), 0) }
-        fun chip(label: String, onClick: () -> Unit) = TextView(this).apply {
-            text = label; setTextColor(fg); textSize = 12f; typeface = Typeface.DEFAULT_BOLD
-            setPadding(dp(10), dp(6), dp(10), dp(6)); setOnClickListener { onClick() }
-            background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(10).toFloat(); setColor(if (s.darkTheme) 0xFF1A2034.toInt() else 0xFFC1C7D4.toInt()) }
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(6) }
+        val chipBg = if (s.darkTheme) 0xFF1A2034.toInt() else 0xFFC1C7D4.toInt()
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setBackgroundColor(bg)
+            isForceDarkAllowed = false // MIUI/One UI must not invert the keyboard colours
         }
-        statusView = chip("…") { cycleActiveLaptop() }.apply { layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(6) }; maxLines = 1 }
+        fun chip(label: String, onClick: () -> Unit) = TextView(this).apply {
+            text = label; setTextColor(fg); textSize = 12f; typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
+            setPadding(dp(10), dp(6), dp(10), dp(6)); setOnClickListener { onClick() }
+            background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(10).toFloat(); setColor(chipBg) }
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(5) }
+        }
+
+        // --- adjust panel (hidden until ⇕ is tapped): move up/down, height, width, alignment, drag handle
+        adjustPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE; setPadding(dp(6), dp(4), dp(6), dp(2)) }
+        val handle = TextView(this).apply {
+            text = "≡  drag up / down to move the keyboard  ≡"; setTextColor(fg); textSize = 12f; gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(8))
+            background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(10).toFloat(); setColor(0xFF5CC8FF.toInt() and 0x55FFFFFF) }
+        }
+        var dragStartY = 0f; var dragStartOffset = 0
+        handle.setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> { dragStartY = e.rawY; dragStartOffset = currentOffsetDp() }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    liveOffsetDp = (dragStartOffset + ((dragStartY - e.rawY) / resources.displayMetrics.density).toInt()).coerceIn(0, maxOffsetDp())
+                    applyGeometry()
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    val v = liveOffsetDp; liveOffsetDp = -1
+                    if (v >= 0) UkRuntime.settings.update { it.copy(keyboardOffsetDp = v) }
+                }
+            }
+            true
+        }
+        fun row(vararg views: View) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(0, dp(3), 0, dp(3)); views.forEach { addView(it) }
+        }
+        fun adj(change: (com.ukpro.android.data.AppSettings) -> com.ukpro.android.data.AppSettings) {
+            UkRuntime.settings.update(change); keyboard.post { applySettings() }
+        }
+        adjustPanel.addView(handle)
+        adjustPanel.addView(row(
+            chip("▲ Up") { adj { it.copy(keyboardOffsetDp = (it.keyboardOffsetDp + 24).coerceAtMost(maxOffsetDp())) } },
+            chip("▼ Down") { adj { it.copy(keyboardOffsetDp = (it.keyboardOffsetDp - 24).coerceAtLeast(0)) } },
+            chip("A− Shorter") { adj { it.copy(keyboardHeight = (it.keyboardHeight - 0.1f).coerceAtLeast(0.5f)) } },
+            chip("A+ Taller") { adj { it.copy(keyboardHeight = (it.keyboardHeight + 0.1f).coerceAtMost(2.0f)) } }))
+        adjustPanel.addView(row(
+            chip("◂▸ Narrower") { adj { it.copy(keyboardWidth = (it.keyboardWidth - 0.05f).coerceAtLeast(0.5f)) } },
+            chip("◂  ▸ Wider") { adj { it.copy(keyboardWidth = (it.keyboardWidth + 0.05f).coerceAtMost(1.0f)) } },
+            chip("⇤") { adj { it.copy(keyboardAlign = "left") } },
+            chip("⇔") { adj { it.copy(keyboardAlign = "center") } },
+            chip("⇥") { adj { it.copy(keyboardAlign = "right") } }))
+        adjustPanel.addView(row(
+            chip("Reset") { adj { it.copy(keyboardOffsetDp = 0, keyboardHeight = 1.0f, keyboardWidth = 1.0f, keyboardAlign = "center") } },
+            chip("✓ Done") { adjustPanel.visibility = View.GONE }))
+
+        // --- toolbar
+        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(6), dp(4), dp(6), 0) }
+        statusView = chip("…") { cycleActiveLaptop() }.apply { layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(5) }; maxLines = 1 }
         outputView = chip(outputLabel()) { cycleOutput() }
         bar.addView(statusView)
         bar.addView(outputView)
+        bar.addView(chip("⇕") { adjustPanel.visibility = if (adjustPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE })
         bar.addView(chip("📋→PC") { UkRuntime.clipboard.onLocalClip(cm.primaryClip, manual = true); UkRuntime.toast("Clipboard sent") })
         bar.addView(chip(if (s.paused) "▶" else "⏸") { UkRuntime.setPaused(!UkRuntime.settings.current.paused); updateStatus() })
         bar.addView(chip("🌐") { if (!switchToNextInputMethod(false)) requestHideSelf(0) })
+
         keyboard = DesktopKeyboardView(this).apply { listener = this@UkImeService }
-        applySettings()
+        keyboardHolder = android.widget.FrameLayout(this)
+        keyboardHolder.addView(keyboard, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        bottomSpacer = View(this)
+
+        root.addView(adjustPanel)
         root.addView(bar)
-        root.addView(keyboard, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(keyboardHolder, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(bottomSpacer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0))
+
+        // Android 15 draws apps edge-to-edge: keep the bottom row above the navigation / gesture bar
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            navInset = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars()).bottom
+            applyGeometry()
+            insets
+        }
+        applySettings()
         statusView.post(statusTicker)
         return root
+    }
+
+    private fun currentOffsetDp() = if (liveOffsetDp >= 0) liveOffsetDp else UkRuntime.settings.current.keyboardOffsetDp
+    private fun maxOffsetDp() = (resources.displayMetrics.heightPixels / resources.displayMetrics.density / 2).toInt()
+
+    /** Position and size: lift above the bottom, width and one-handed alignment. */
+    private fun applyGeometry() {
+        if (!::root.isInitialized) return
+        val s = UkRuntime.settings.current
+        val lp = bottomSpacer.layoutParams
+        lp.height = navInset + dp(currentOffsetDp())
+        bottomSpacer.layoutParams = lp
+        val screenW = resources.displayMetrics.widthPixels
+        val kbLp = keyboard.layoutParams as android.widget.FrameLayout.LayoutParams
+        kbLp.width = if (s.keyboardWidth >= 0.999f) ViewGroup.LayoutParams.MATCH_PARENT else (screenW * s.keyboardWidth).toInt()
+        kbLp.gravity = when (s.keyboardAlign) { "left" -> Gravity.START; "right" -> Gravity.END; else -> Gravity.CENTER_HORIZONTAL }
+        keyboard.layoutParams = kbLp
     }
 
     private fun applySettings() {
@@ -100,8 +192,14 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
         keyboard.heightScale = s.keyboardHeight
         keyboard.dark = s.darkTheme; keyboard.sound = s.keySound; keyboard.vibration = s.vibration
         val lang = Languages.byId(s.language)
+        if (lang.id != composerLang) {
+            commitComposition()
+            composer = lang.composer?.invoke()
+            composerLang = lang.id
+        }
         keyboard.layoutDirection = View.LAYOUT_DIRECTION_LTR // physical layout stays left-to-right even for RTL scripts
         keyboard.setRows(if (showPanel) KeyboardLayouts.navPanel() else KeyboardLayouts.main(lang))
+        applyGeometry()
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -148,6 +246,7 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
+        commitComposition()
         super.onFinishInputView(finishingInput)
         InputSync.setFocus(FocusInfo(editable = false, password = false, app = ""))
     }
@@ -189,16 +288,45 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
         // Win-key and Alt combos only make sense on Windows (Win+D, Alt+Tab, Alt+F4…)
         val pcOnlyCombo = mods and (KeyMods.META or KeyMods.ALT) != 0
         if (key.kind == KeyKind.CHAR && !shortcut && text != null) {
+            val c = composer
+            if (c != null) {
+                val committed = c.input(text)
+                if (committed.isNotEmpty()) emitCommit(committed, toPhone, toPc)
+                showComposing(toPhone)
+                return
+            }
             if (toPhone) currentInputConnection?.commitText(text, 1)
             if (toPc) UkRuntime.sendInput(MessageTypes.TEXT_COMMIT, linkedMapOf("text" to text))
             return
         }
+        if (key.code == "Backspace" && !shortcut && composer?.backspace() == true) { showComposing(toPhone); return }
+        commitComposition()
         if (toPhone && !pcOnlyCombo) sendLocalKey(key.code, mods)
         if (toPc) {
             val p = linkedMapOf<String, Any?>("code" to key.code, "key" to (text ?: ""), "mods" to (mods and KeyMods.CAPS.inv()).toLong(), "repeat" to false)
             UkRuntime.sendInput(MessageTypes.KEY_DOWN, p)
             UkRuntime.sendInput(MessageTypes.KEY_UP, LinkedHashMap(p))
         }
+    }
+
+    private fun emitCommit(text: String, toPhone: Boolean, toPc: Boolean) {
+        if (toPhone) currentInputConnection?.commitText(text, 1)
+        if (toPc) UkRuntime.sendInput(MessageTypes.COMPOSITION_COMMIT, linkedMapOf("text" to text, "composer" to (composerLang ?: "")))
+    }
+
+    private fun showComposing(toPhone: Boolean) {
+        val comp = composer?.composing ?: ""
+        if (toPhone) currentInputConnection?.setComposingText(comp, 1)
+        else if (::statusView.isInitialized) statusView.text = if (comp.isEmpty()) statusView.text else "✎ $comp"
+    }
+
+    /** Commits whatever is still composing (before Enter, arrows, shortcuts, language change or leaving the field). */
+    private fun commitComposition() {
+        val c = composer ?: return
+        val t = c.flush()
+        if (t.isEmpty()) return
+        val mode = UkRuntime.settings.current.outputMode
+        emitCommit(t, mode != OutputMode.PC_ONLY, mode != OutputMode.PHONE_ONLY && !password)
     }
 
     private fun sendLocalKey(code: String, mods: Int) {

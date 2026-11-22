@@ -2,4 +2,6 @@
 <paths>
     <cache-path name="clipboard" path="clipboard/" />
     <files-path name="received" path="received/" />
+    <external-files-path name="incoming" path="Download/incoming/" />
+    <external-path name="downloads" path="Download/UK Pro/" />
 </paths>

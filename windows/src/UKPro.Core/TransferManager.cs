@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 namespace UKPro.Core;
 
 public enum TransferDirection { Incoming, Outgoing }
-public enum TransferState { Waiting, Running, Paused, Verifying, Completed, Failed, Cancelled }
+public enum TransferState { Preparing, Waiting, Running, Paused, Verifying, Completed, Failed, Cancelled }
 
 public sealed class TransferInfo
 {
@@ -34,9 +34,9 @@ public sealed class TransferManager
     private readonly ConcurrentDictionary<string, (FileReceiver Rx, TransferInfo Info, Stopwatch Clock, long StartOffset)> _incoming = new();
     private readonly ConcurrentDictionary<string, Outgoing> _outgoing = new();
 
-    private sealed class Outgoing(FileSender sender, TransferInfo info)
+    private sealed class Outgoing(TransferInfo info)
     {
-        public FileSender Sender { get; } = sender;
+        public FileSender Sender { get; set; } = null!;
         public TransferInfo Info { get; } = info;
         public TaskCompletionSource<long> Accepted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource<bool> Result = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -55,7 +55,9 @@ public sealed class TransferManager
         };
     }
 
-    public long MaxIncomingBytes { get; set; } = 64L * 1024 * 1024 * 1024;
+    /// <summary>No artificial size limit on Wi-Fi; only free disk space (plus <see cref="ReserveBytes"/>) limits a transfer.</summary>
+    public long MaxIncomingBytes { get; set; } = long.MaxValue;
+    public long ReserveBytes { get; set; } = 256L * 1024 * 1024;
     public Func<TransferInfo, bool> AcceptIncoming { get; set; } = _ => true;
     public event Action<TransferInfo>? Changed;
     public IEnumerable<TransferInfo> All => _incoming.Values.Select(v => v.Info).Concat(_outgoing.Values.Select(o => o.Info));
@@ -66,14 +68,16 @@ public sealed class TransferManager
     public async Task<TransferInfo> SendFileAsync(string peerId, string path, int chunkSize = 256 * 1024, string purpose = "file",
         int attempts = 5, string? transferId = null, CancellationToken ct = default)
     {
-        var sender = await FileSender.CreateAsync(path, chunkSize, purpose, transferId: transferId, ct: ct).ConfigureAwait(false);
         var info = new TransferInfo
         {
-            TransferId = sender.TransferId, PeerId = peerId, Name = sender.Name, Size = sender.Size,
-            Direction = TransferDirection.Outgoing, Purpose = purpose,
+            TransferId = transferId ?? Guid.NewGuid().ToString(), PeerId = peerId, Name = Path.GetFileName(path),
+            Size = new FileInfo(path).Length, Direction = TransferDirection.Outgoing, Purpose = purpose, State = TransferState.Preparing,
         };
-        var o = new Outgoing(sender, info);
+        var o = new Outgoing(info);
         _outgoing[info.TransferId] = o;
+        Changed?.Invoke(info); // hashing a very large file takes a while: show it
+        o.Sender = await FileSender.CreateAsync(path, chunkSize, purpose, transferId: info.TransferId, ct: ct).ConfigureAwait(false);
+        Set(info, TransferState.Waiting);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, o.Cts.Token);
         for (int attempt = 1; attempt <= attempts; attempt++)
         {
@@ -124,7 +128,9 @@ public sealed class TransferManager
         }
         Set(info, TransferState.Verifying);
         await _hub.SendAsync(info.PeerId, MessageTypes.FileComplete, new JsonObject { ["transferId"] = info.TransferId }).ConfigureAwait(false);
-        var ok = await o.Result.Task.WaitAsync(TimeSpan.FromMinutes(5), ct).ConfigureAwait(false);
+        // the receiver re-reads the whole file to verify it: allow ~20 MB/s plus 5 minutes
+        var verifyBudget = TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(info.Size / (20.0 * 1024 * 1024));
+        var ok = await o.Result.Task.WaitAsync(verifyBudget, ct).ConfigureAwait(false);
         Set(info, ok ? TransferState.Completed : TransferState.Failed);
     }
 
@@ -169,7 +175,13 @@ public sealed class TransferManager
                 if (_outgoing.TryGetValue(id, out var op)) op.Paused = e.Bool("paused", true);
                 break;
             case MessageTypes.FileCancel:
-                if (_outgoing.TryGetValue(id, out var oc)) { oc.Accepted.TrySetResult(-1); oc.Cts.Cancel(); }
+                if (_outgoing.TryGetValue(id, out var oc))
+                {
+                    var noSpace = e.Str("reason") == "NO_SPACE";
+                    oc.Info.Error = noSpace ? "Not enough free space on the phone" : e.Str("reason", "cancelled");
+                    oc.Accepted.TrySetResult(-1);
+                    if (!noSpace) oc.Cts.Cancel();
+                }
                 if (_incoming.TryRemove(id, out var ic)) { ic.Rx.Abort(true); Set(ic.Info, TransferState.Cancelled); }
                 break;
             case MessageTypes.FileComplete: _ = HandleCompleteAsync(peer, id); break;
@@ -191,7 +203,16 @@ public sealed class TransferManager
             return;
         }
         if (_incoming.TryRemove(id, out var prev)) prev.Rx.Dispose(); // resumed attempt: reopen side-car
-        var rx = new FileReceiver((JsonObject)e.Payload.DeepClone(), _destinationFor(peer.Device.DeviceId, info));
+        var dir = _destinationFor(peer.Device.DeviceId, info);
+        var rx = new FileReceiver((JsonObject)e.Payload.DeepClone(), dir);
+        if (FreeSpace(dir) is { } free && free < size - rx.ResumeFrom + ReserveBytes)
+        {
+            rx.Dispose();
+            info.Error = $"Not enough free disk space ({(size - rx.ResumeFrom) / 1048576} MB needed)";
+            Set(info, TransferState.Failed);
+            await _hub.SendAsync(peer.Device.DeviceId, MessageTypes.FileCancel, new JsonObject { ["transferId"] = id, ["reason"] = "NO_SPACE" });
+            return;
+        }
         info.Transferred = rx.ResumeFrom;
         _incoming[id] = (rx, info, Stopwatch.StartNew(), rx.ResumeFrom);
         Set(info, TransferState.Running);
@@ -232,4 +253,10 @@ public sealed class TransferManager
     }
 
     private void Set(TransferInfo i, TransferState s) { i.State = s; Changed?.Invoke(i); }
+
+    private static long? FreeSpace(string dir)
+    {
+        try { return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(dir))!).AvailableFreeSpace; }
+        catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException) { return null; }
+    }
 }

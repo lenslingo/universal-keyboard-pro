@@ -38,7 +38,10 @@ data class AppSettings(
     val paused: Boolean = false,
     val historyEnabled: Boolean = true,
     val historyMaxItems: Int = 200,
-    val keyboardHeight: Float = 1.0f,     // 0.6 … 1.5
+    val keyboardHeight: Float = 1.0f,     // 0.5 … 2.0 (key height scale)
+    val keyboardOffsetDp: Int = 0,        // lift above the bottom edge, 0 … 480 dp
+    val keyboardWidth: Float = 1.0f,      // 0.5 … 1.0 of the screen width
+    val keyboardAlign: String = "center", // left | center | right (one-handed use)
     val darkTheme: Boolean = true,
     val keySound: Boolean = false,
     val vibration: Boolean = true,
@@ -65,6 +68,7 @@ class SettingsRepo(private val context: Context, private val scope: CoroutineSco
         val langs = stringSetPreferencesKey("languages")
         val output = stringPreferencesKey("output"); val conn = stringPreferencesKey("conn")
         val hub = stringPreferencesKey("active_hub"); val nav = booleanPreferencesKey("nav_panel")
+        val offset = intPreferencesKey("kb_offset"); val width = floatPreferencesKey("kb_width"); val align = stringPreferencesKey("kb_align")
     }
 
     private val _state = MutableStateFlow(AppSettings())
@@ -84,6 +88,7 @@ class SettingsRepo(private val context: Context, private val scope: CoroutineSco
                     outputMode = p[K.output]?.let { runCatching { OutputMode.valueOf(it) }.getOrNull() } ?: OutputMode.BOTH,
                     connectionMode = p[K.conn]?.let { runCatching { ConnectionMode.valueOf(it) }.getOrNull() } ?: ConnectionMode.AUTO,
                     activeHubId = p[K.hub], showNavPanel = p[K.nav] ?: false,
+                    keyboardOffsetDp = p[K.offset] ?: 0, keyboardWidth = p[K.width] ?: 1.0f, keyboardAlign = p[K.align] ?: "center",
                 )
             }
         }
@@ -98,6 +103,7 @@ class SettingsRepo(private val context: Context, private val scope: CoroutineSco
                 p[K.clipFiles] = n.clipboardFiles; p[K.paused] = n.paused; p[K.history] = n.historyEnabled
                 p[K.historyMax] = n.historyMaxItems; p[K.height] = n.keyboardHeight; p[K.dark] = n.darkTheme
                 p[K.sound] = n.keySound; p[K.vib] = n.vibration; p[K.lang] = n.language; p[K.langs] = n.languages
+                p[K.offset] = n.keyboardOffsetDp; p[K.width] = n.keyboardWidth; p[K.align] = n.keyboardAlign
                 p[K.output] = n.outputMode.name; p[K.conn] = n.connectionMode.name; p[K.nav] = n.showNavPanel
                 if (n.activeHubId != null) p[K.hub] = n.activeHubId else p.remove(K.hub)
             }

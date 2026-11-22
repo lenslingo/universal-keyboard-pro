@@ -65,25 +65,38 @@ private fun time(ts: Long): String = DateFormat.getDateTimeInstance(DateFormat.S
 fun KeyboardScreen() {
     val s by UkRuntime.settings.state.collectAsState()
     var typed by remember { mutableStateOf("") }
+    var langQuery by remember { mutableStateOf("") }
     LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
         item {
             UkCard("Appearance") {
-                Text("Height: ${(s.keyboardHeight * 100).toInt()}%")
-                Slider(value = s.keyboardHeight, valueRange = 0.6f..1.5f, onValueChange = { v -> UkRuntime.settings.update { it.copy(keyboardHeight = v) } })
+                Text("Tip: tap ⇕ on the keyboard's toolbar to move and resize it while you type.", style = MaterialTheme.typography.bodySmall)
+                Text("Key height: ${(s.keyboardHeight * 100).toInt()}%")
+                Slider(value = s.keyboardHeight, valueRange = 0.5f..2.0f, onValueChange = { v -> UkRuntime.settings.update { it.copy(keyboardHeight = v) } })
+                Text("Lift above the bottom edge: ${s.keyboardOffsetDp} dp")
+                Slider(value = s.keyboardOffsetDp.toFloat(), valueRange = 0f..480f, onValueChange = { v -> UkRuntime.settings.update { it.copy(keyboardOffsetDp = v.toInt()) } })
+                Text("Width: ${(s.keyboardWidth * 100).toInt()}% of the screen")
+                Slider(value = s.keyboardWidth, valueRange = 0.5f..1.0f, onValueChange = { v -> UkRuntime.settings.update { it.copy(keyboardWidth = v) } })
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for ((id, label) in listOf("left" to "⇤ Left", "center" to "⇔ Center", "right" to "⇥ Right"))
+                        FilterChip(selected = s.keyboardAlign == id, onClick = { UkRuntime.settings.update { it.copy(keyboardAlign = id) } }, label = { Text(label) })
+                }
                 ToggleRow("Dark theme", s.darkTheme) { v -> UkRuntime.settings.update { it.copy(darkTheme = v) } }
                 ToggleRow("Key sound", s.keySound) { v -> UkRuntime.settings.update { it.copy(keySound = v) } }
                 ToggleRow("Vibration", s.vibration) { v -> UkRuntime.settings.update { it.copy(vibration = v) } }
             }
         }
         item {
-            UkCard("Languages (🌐 key cycles through the ticked ones)") {
-                for (l in com.ukpro.android.keyboard.Languages.all) {
+            UkCard("Languages — ${com.ukpro.android.keyboard.Languages.all.size} layouts (🌐 key cycles through the ticked ones)") {
+                OutlinedTextField(langQuery, { langQuery = it }, label = { Text("Search language") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                var lastGroup = ""
+                for (l in com.ukpro.android.keyboard.Languages.all.filter { langQuery.isBlank() || it.name.contains(langQuery, ignoreCase = true) || it.id.startsWith(langQuery.trim(), ignoreCase = true) }) {
+                    if (l.group != lastGroup && l.group.isNotEmpty()) { lastGroup = l.group; Text(l.group, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 8.dp)) }
                     ToggleRow("${l.name}${if (l.id == s.language) "  ← current" else ""}", l.id == "en" || l.id in s.languages, enabled = l.id != "en") { on ->
                         UkRuntime.settings.update { st -> st.copy(languages = if (on) st.languages + l.id else st.languages - l.id,
-                            language = if (!on && st.language == l.id) "en" else st.language) }
+                            language = if (on) l.id else if (st.language == l.id) "en" else st.language) }
                     }
                 }
-                Text("Every other language (中文, 日本語, 한국어, ไทย, தமிழ் …): use the Universal text screen with any keyboard installed on your phone, or copy & paste — clipboard sync carries any Unicode text.",
+                Text("Chinese (Pinyin/Zhuyin/Cangjie), Japanese kanji and any other language: use the Universal text screen with any keyboard installed on your phone (e.g. Gboard), or copy & paste — clipboard sync carries any Unicode text.",
                     style = MaterialTheme.typography.bodySmall)
             }
         }
@@ -120,7 +133,7 @@ fun KeyboardScreen() {
                         }
                     }
                 }, update = { v ->
-                    v.heightScale = s.keyboardHeight; v.dark = s.darkTheme; v.vibration = s.vibration; v.sound = s.keySound
+                    v.heightScale = s.keyboardHeight.coerceAtMost(1.2f); v.dark = s.darkTheme; v.vibration = s.vibration; v.sound = s.keySound
                     v.setRows(if (s.showNavPanel) KeyboardLayouts.navPanel() else KeyboardLayouts.main(com.ukpro.android.keyboard.Languages.byId(s.language)))
                 }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             }
@@ -256,8 +269,9 @@ fun FilesScreen() {
     LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
         item {
             UkCard("Send to laptop") {
-                Text("PDF, Office, images, video, ZIP — any size. Interrupted transfers resume; every file is SHA-256 verified. " +
-                    "Received files are saved to Downloads/UK Pro.", style = MaterialTheme.typography.bodySmall)
+                Text("PDF, Office, images, video, ZIP — no size limit on Wi-Fi (only free storage space limits it). " +
+                    "Files are streamed in chunks, interrupted transfers resume where they stopped, and every file is SHA-256 verified. " +
+                    "Received files go straight to Download/UK Pro.", style = MaterialTheme.typography.bodySmall)
                 Button(onClick = { pick.launch(arrayOf("*/*")) }, modifier = Modifier.padding(top = 8.dp)) { Text("Choose files…") }
             }
         }

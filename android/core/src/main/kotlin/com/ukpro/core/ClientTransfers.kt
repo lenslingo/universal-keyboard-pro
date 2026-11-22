@@ -11,7 +11,7 @@ import java.util.concurrent.TimeoutException
 class TransferProgress(
     val transferId: String, val name: String, val size: Long, val incoming: Boolean, val purpose: String
 ) {
-    enum class State { WAITING, RUNNING, PAUSED, VERIFYING, COMPLETED, FAILED, CANCELLED }
+    enum class State { PREPARING, WAITING, RUNNING, PAUSED, VERIFYING, COMPLETED, FAILED, CANCELLED }
     @Volatile var transferred = 0L
     @Volatile var bytesPerSecond = 0.0
     @Volatile var state = State.WAITING
@@ -28,7 +28,9 @@ class TransferProgress(
 class ClientTransfers(
     private val session: ClientSession,
     private val destinationDir: (TransferProgress) -> File,
-    private val onChange: (TransferProgress) -> Unit = {}
+    private val onChange: (TransferProgress) -> Unit = {},
+    /** Runs long work (SHA-256 of a multi-GB file) off the session thread so keep-alive pings continue. */
+    private val background: (Runnable) -> Unit = { r -> Thread(r, "ukpro-verify").apply { isDaemon = true }.start() }
 ) {
     private class Incoming(val rx: FileReceiver, val p: TransferProgress, val startedAt: Long, val startOffset: Long)
     private class Outgoing(val p: TransferProgress) {
@@ -42,7 +44,10 @@ class ClientTransfers(
     private val outgoing = ConcurrentHashMap<String, Outgoing>()
     /** Snapshot of running and recent transfers for the UI. */
     val active: List<TransferProgress> get() = incoming.values.map { it.p } + outgoing.values.map { it.p }
-    var maxIncomingBytes = 64L * 1024 * 1024 * 1024
+    /** No artificial size limit on Wi-Fi: the only limit is free storage space (checked per transfer). */
+    var maxIncomingBytes = Long.MAX_VALUE
+    /** Extra free space kept on the device after a transfer. */
+    var reserveBytes = 64L * 1024 * 1024
     var acceptIncoming: (TransferProgress) -> Boolean = { true }
 
     fun sendFile(source: FileSource, chunkSize: Int = 256 * 1024, purpose: String = "file", attempts: Int = 5,
@@ -51,6 +56,7 @@ class ClientTransfers(
         val p = TransferProgress(tx.transferId, source.name, source.size, false, purpose)
         val o = Outgoing(p)
         outgoing[tx.transferId] = o
+        set(p, TransferProgress.State.PREPARING) // SHA-256 of the whole file is computed while streaming it once
         try {
             for (attempt in 1..attempts) {
                 if (o.cancelled) { set(p, TransferProgress.State.CANCELLED); return p }
@@ -76,7 +82,9 @@ class ClientTransfers(
 
     private fun runOnce(tx: FileSender, o: Outgoing) {
         val p = o.p
-        session.send(MessageTypes.FILE_START, tx.startPayload())
+        val start = tx.startPayload()
+        set(p, TransferProgress.State.WAITING)
+        session.send(MessageTypes.FILE_START, start)
         val resume = try { o.accepted.get(60, TimeUnit.SECONDS) } catch (e: java.util.concurrent.ExecutionException) { throw IOException(e.cause) }
         if (resume < 0) throw ProtocolException("FEATURE_DISABLED", "receiver declined")
         set(p, TransferProgress.State.RUNNING)
@@ -98,7 +106,8 @@ class ClientTransfers(
         }
         set(p, TransferProgress.State.VERIFYING)
         session.send(MessageTypes.FILE_COMPLETE, payloadOf("transferId" to tx.transferId))
-        val ok = o.result.get(5, TimeUnit.MINUTES)
+        // the receiver re-reads the file to verify it: allow ~20 MB/s plus 5 minutes
+        val ok = o.result.get(300_000L + p.size / (20L * 1024 * 1024) * 1000, TimeUnit.MILLISECONDS)
         set(p, if (ok) TransferProgress.State.COMPLETED else TransferProgress.State.FAILED)
     }
 
@@ -129,7 +138,8 @@ class ClientTransfers(
             MessageTypes.FILE_RESULT -> outgoing[id]?.result?.complete(e.bool("ok"))
             MessageTypes.FILE_PAUSE -> outgoing[id]?.paused = e.bool("paused", true)
             MessageTypes.FILE_CANCEL -> {
-                outgoing[id]?.let { it.cancelled = true; it.accepted.complete(-1) }
+                outgoing[id]?.let { it.p.error = when (e.str("reason")) { "NO_SPACE" -> "Not enough free space on the laptop"; "" -> "cancelled"; else -> e.str("reason") }
+                    it.cancelled = true; it.accepted.complete(-1) }
                 incoming.remove(id)?.let { it.rx.abort(true); set(it.p, TransferProgress.State.CANCELLED) }
             }
             MessageTypes.FILE_COMPLETE -> handleComplete(id)
@@ -159,7 +169,15 @@ class ClientTransfers(
             session.send(MessageTypes.FILE_CANCEL, payloadOf("transferId" to id, "reason" to "declined")); return
         }
         incoming.remove(id)?.rx?.abort(false)
-        val rx = FileReceiver(e.payload, destinationDir(p))
+        val dir = destinationDir(p)
+        val rx = FileReceiver(e.payload, dir)
+        val needed = p.size - rx.resumeFrom + reserveBytes
+        if (dir.usableSpace in 1 until needed) {
+            p.error = "Not enough free space (${needed / 1048576} MB needed)"
+            set(p, TransferProgress.State.FAILED)
+            session.send(MessageTypes.FILE_CANCEL, payloadOf("transferId" to id, "reason" to "NO_SPACE"))
+            return
+        }
         p.transferred = rx.resumeFrom
         incoming[id] = Incoming(rx, p, System.nanoTime(), rx.resumeFrom)
         set(p, TransferProgress.State.RUNNING)
@@ -169,9 +187,11 @@ class ClientTransfers(
     private fun handleComplete(id: String) {
         val t = incoming.remove(id) ?: return
         set(t.p, TransferProgress.State.VERIFYING)
-        val ok = try { t.p.finalFile = t.rx.complete(); true } catch (e: Exception) { t.p.error = e.message; false }
-        set(t.p, if (ok) TransferProgress.State.COMPLETED else TransferProgress.State.FAILED)
-        session.send(MessageTypes.FILE_RESULT, payloadOf("transferId" to id, "ok" to ok, "sha256" to t.rx.expectedSha256))
+        background(Runnable {
+            val ok = try { t.p.finalFile = t.rx.complete(); true } catch (e: Exception) { t.p.error = e.message; false }
+            set(t.p, if (ok) TransferProgress.State.COMPLETED else TransferProgress.State.FAILED)
+            session.send(MessageTypes.FILE_RESULT, payloadOf("transferId" to id, "ok" to ok, "sha256" to t.rx.expectedSha256))
+        })
     }
 
     private fun set(p: TransferProgress, s: TransferProgress.State) { p.state = s; onChange(p) }

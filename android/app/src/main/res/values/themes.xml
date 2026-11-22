@@ -4,6 +4,8 @@
         <item name="android:statusBarColor">#0F1320</item>
         <item name="android:navigationBarColor">#0F1320</item>
         <item name="android:windowBackground">#0F1320</item>
+        <!-- MIUI / One UI "force dark" would invert our already-dark UI into a light one -->
+        <item name="android:forceDarkAllowed">false</item>
     </style>
     <style name="Theme.UKPro.Translucent" parent="android:Theme.Translucent.NoTitleBar">
         <item name="android:windowNoTitle">true</item>

@@ -66,8 +66,10 @@ class HubConnection private constructor(
     }, hub)
 
     val transfers: ClientTransfers = ClientTransfers(session,
-        { p -> File(context.cacheDir, if (p.purpose == "file") "incoming" else "clipboard").apply { mkdirs() } },
-        { p -> events.onTransfer(this, p) })
+        { p -> if (p.purpose == "file") com.ukpro.android.UkRuntime.transfers.incomingDir()
+               else File(context.cacheDir, "clipboard").apply { mkdirs() } },
+        { p -> events.onTransfer(this, p) },
+        { r -> com.ukpro.android.UkRuntime.io.execute(r) })
 
     val hubId: String? get() = session.hub?.hubId
     val name: String get() = session.hub?.name ?: "Laptop"

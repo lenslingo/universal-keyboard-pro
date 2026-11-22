@@ -29,7 +29,9 @@ class DesktopKeyboardView(context: Context) : View(context) {
     enum class ModState { OFF, ONESHOT, LOCKED }
 
     var listener: KeyboardActionListener? = null
-    var heightScale = 1.0f; set(v) { field = v.coerceIn(0.6f, 1.5f); requestLayout() }
+    var heightScale = 1.0f; set(v) { field = v.coerceIn(0.5f, 2.0f); requestLayout() }
+
+    init { isForceDarkAllowed = false }
     var dark = true; set(v) { field = v; invalidate() }
     var sound = false
     var vibration = true
