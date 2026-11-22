@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsRemote
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Mouse
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -78,7 +79,10 @@ enum class Screen(val title: String, val icon: ImageVector) {
     Remote("Remote Control", Icons.Filled.SettingsRemote), Clipboard("Clipboard", Icons.Filled.ContentPaste),
     Files("File Transfer", Icons.Filled.FolderCopy), Devices("Connected Devices", Icons.Filled.Devices),
     History("History", Icons.Filled.History), Settings("Settings", Icons.Filled.Settings),
+    About("About & Developer", Icons.Filled.Info),
 }
+
+const val DEVELOPER_NAME = "Md. Marufur Rahman Moni"
 
 private val Accent = Color(0xFF5CC8FF)
 private val Warm = Color(0xFFFFB040)
@@ -121,7 +125,8 @@ private fun App() {
 
     ModalNavigationDrawer(drawerState = drawer, drawerContent = {
         ModalDrawerSheet {
-            Text("UK Pro", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(20.dp), fontWeight = FontWeight.Bold)
+            Text("UK Pro", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(start = 20.dp, top = 20.dp), fontWeight = FontWeight.Bold)
+            Text("by $DEVELOPER_NAME", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 20.dp, bottom = 12.dp))
             for (s in Screen.values()) NavigationDrawerItem(
                 label = { Text(s.title) }, icon = { Icon(s.icon, null) }, selected = s == screen,
                 onClick = { screen = s; scope.launch { drawer.close() } }, modifier = Modifier.padding(horizontal = 12.dp))
@@ -144,6 +149,7 @@ private fun App() {
                     Screen.Devices -> DevicesScreen()
                     Screen.History -> HistoryScreen()
                     Screen.Settings -> SettingsScreen()
+                    Screen.About -> AboutScreen()
                 }
             }
         }

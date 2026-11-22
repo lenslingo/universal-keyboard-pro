@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -83,6 +85,7 @@ fun KeyboardScreen() {
                 ToggleRow("Dark theme", s.darkTheme) { v -> UkRuntime.settings.update { it.copy(darkTheme = v) } }
                 ToggleRow("Key sound", s.keySound) { v -> UkRuntime.settings.update { it.copy(keySound = v) } }
                 ToggleRow("Vibration", s.vibration) { v -> UkRuntime.settings.update { it.copy(vibration = v) } }
+                ToggleRow("Clipboard strip above the keyboard (tap to paste)", s.clipStrip) { v -> UkRuntime.settings.update { it.copy(clipStrip = v) } }
             }
         }
         item {
@@ -540,5 +543,40 @@ fun MouseScreen() {
                 ToggleRow("Natural scrolling (content follows fingers)", s.naturalScroll) { v -> UkRuntime.settings.update { it.copy(naturalScroll = v) } }
             }
         }
+    }
+}
+
+
+// ------------------------------------------------------------------ About & developer
+
+@Composable
+fun AboutScreen() {
+    val ctx = LocalContext.current
+    val version = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
+    LazyColumn(contentPadding = PaddingValues(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth()) {
+        item {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(com.ukpro.android.R.drawable.developer),
+                contentDescription = "Developer photo",
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.padding(8.dp).size(160.dp).clip(androidx.compose.foundation.shape.CircleShape))
+        }
+        item { Text(DEVELOPER_NAME, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 8.dp)) }
+        item { Text("Developer", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary) }
+        item {
+            UkCard("Universal Keyboard Pro $version") {
+                Text("Android ⇄ Windows: two-way keyboard in ~40 languages, touchpad/mouse, universal clipboard with history, " +
+                    "unlimited Wi-Fi file transfer, remote control panel and multi-device — encrypted, local network only, no cloud.",
+                    style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        item {
+            UkCard("Privacy") {
+                Text("Keystrokes are never logged or stored. Password fields are never mirrored. Pairing secrets stay in the Android Keystore.",
+                    style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        item { Text("© 2026 $DEVELOPER_NAME", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(16.dp)) }
     }
 }

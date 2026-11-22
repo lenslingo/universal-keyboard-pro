@@ -46,6 +46,13 @@ Several phones can pair with one laptop, and one phone with several laptops.
 * Modifiers: tap once = next key only, double-tap = lock, or hold with one finger.
 * **Nav** shows Insert/Home/End/PgUp/PgDn/arrows and the numeric keypad.
 
+### Clipboard strip (above the keyboard)
+The latest copied item (📋, outlined) and recent clipboard history — text, images, files, including what was
+copied on the laptop — appear above the keyboard. Tap to paste into the current field (and to the PC in
+*Phone+PC* mode). Images are inserted directly in apps that accept them (chat apps); otherwise they are put
+on the clipboard. ✕ hides the strip until the keyboard is reopened; switch it off in *Keyboard → Appearance*.
+Items from password managers are masked (••••).
+
 ### Touchpad / mouse
 Tap **🖱** on the keyboard toolbar (or phone menu → *Touchpad / Mouse*). One finger moves the pointer,
 tap = click, double-tap-and-hold or long-press = drag, two-finger tap = right-click, two-finger slide =

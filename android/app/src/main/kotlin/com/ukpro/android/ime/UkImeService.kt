@@ -48,7 +48,10 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
     private var password = false
     private val remoteDown = HashSet<String>()
     private val cm by lazy { getSystemService(ClipboardManager::class.java) }
-    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { UkRuntime.clipboard.onLocalClip(cm.primaryClip) }
+    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
+        UkRuntime.clipboard.onLocalClip(cm.primaryClip)
+        clipStrip?.refresh()
+    }
     private val statusTicker = object : Runnable {
         override fun run() { updateStatus(); statusView.postDelayed(this, 1500) }
     }
@@ -75,6 +78,7 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
     private var navInset = 0
     private var liveOffsetDp = -1 // while dragging, before it is saved
     private var touchpad: com.ukpro.android.keyboard.TouchpadView? = null
+    private var clipStrip: ClipStrip? = null
     private var mouseMode = false
     /** Korean / Japanese / Vietnamese: text stays composing (underlined) until committed; only commits go to the PC. */
     private var composer: com.ukpro.core.Composer? = null
@@ -157,7 +161,9 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
         keyboardHolder.addView(keyboard, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         bottomSpacer = View(this)
 
+        clipStrip = ClipStrip(this, s.darkTheme) { item -> pasteFromStrip(item) }
         root.addView(adjustPanel)
+        root.addView(clipStrip!!.view)
         root.addView(bar)
         root.addView(keyboardHolder, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(bottomSpacer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0))
@@ -267,6 +273,7 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
         InputSync.sink = this
         InputSync.setFocus(FocusInfo(editable = true, password = password, app = info.packageName ?: ""))
         applySettings()
+        clipStrip?.refresh()
         updateStatus()
     }
 
@@ -332,6 +339,36 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
             UkRuntime.sendInput(MessageTypes.KEY_DOWN, p)
             UkRuntime.sendInput(MessageTypes.KEY_UP, LinkedHashMap(p))
         }
+    }
+
+    /** Tap on the clipboard strip: paste into the focused field (and to the PC, following the output mode). */
+    private fun pasteFromStrip(item: StripItem) {
+        commitComposition()
+        val mode = UkRuntime.settings.current.outputMode
+        val toPhone = mode != OutputMode.PC_ONLY
+        val toPc = mode != OutputMode.PHONE_ONLY && !password
+        val ic = currentInputConnection
+        if (item.text != null) {
+            if (toPhone) ic?.commitText(item.text, 1)
+            if (toPc) UkRuntime.sendInput(MessageTypes.TEXT_COMMIT, linkedMapOf("text" to item.text))
+            return
+        }
+        val uri = item.uri ?: return
+        // images: insert directly where the app supports rich content (chat apps, notes); otherwise copy it
+        val info = currentInputEditorInfo
+        val accepts = info != null && androidx.core.view.inputmethod.EditorInfoCompat.getContentMimeTypes(info)
+            .any { android.content.ClipDescription.compareMimeTypes(item.mime, it) || android.content.ClipDescription.compareMimeTypes(it, item.mime) }
+        if (toPhone && ic != null && info != null && accepts) {
+            val ok = runCatching {
+                androidx.core.view.inputmethod.InputConnectionCompat.commitContent(ic, info,
+                    androidx.core.view.inputmethod.InputContentInfoCompat(uri, android.content.ClipDescription(item.kind, arrayOf(item.mime)), null),
+                    androidx.core.view.inputmethod.InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null)
+            }.getOrDefault(false)
+            if (ok) return
+        }
+        clipStrip?.copyBack(item)
+        UkRuntime.toast(if (item.kind == "image") "Image copied — this app can't insert images from a keyboard; long-press the field → Paste"
+            else "File copied to the clipboard")
     }
 
     private fun emitCommit(text: String, toPhone: Boolean, toPc: Boolean) {

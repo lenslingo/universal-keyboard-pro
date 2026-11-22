@@ -95,6 +95,7 @@ public partial class App : Application
         m.Items.Add(target);
         m.Items.Add("Pair a new phone…", null, (_, _) => ShowMain(tab: "Devices", startPairing: true));
         m.Items.Add("Remote text panel…", null, (_, _) => ShowMain(tab: "Remote text"));
+        m.Items.Add("About UK Pro (by Md. Marufur Rahman Moni)", null, (_, _) => ShowMain(tab: "About"));
         m.Items.Add(new WinForms.ToolStripSeparator());
         m.Items.Add("Exit", null, (_, _) => Shutdown());
     }

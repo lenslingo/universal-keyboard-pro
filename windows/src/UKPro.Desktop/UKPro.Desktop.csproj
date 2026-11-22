@@ -15,7 +15,9 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Version>0.2.0</Version>
     <Product>Universal Keyboard Pro</Product>
-    <Company>UK Pro</Company>
+    <Company>Md. Marufur Rahman Moni</Company>
+    <Authors>Md. Marufur Rahman Moni</Authors>
+    <Copyright>© 2026 Md. Marufur Rahman Moni</Copyright>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\UKPro.Core\UKPro.Core.csproj" />
@@ -23,5 +25,6 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\ukpro.ico" />
+    <Resource Include="Assets\developer.png" />
   </ItemGroup>
 </Project>

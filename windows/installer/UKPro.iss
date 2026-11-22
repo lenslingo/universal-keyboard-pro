@@ -9,7 +9,7 @@
 AppId={{6E4B8F0A-2C51-4B7E-9A6B-1F2D3C4B5A69}
 AppName={#AppName}
 AppVersion={#AppVersion}
-AppPublisher=UK Pro
+AppPublisher=Md. Marufur Rahman Moni
 DefaultDirName={autopf}\UK Pro
 DefaultGroupName=UK Pro
 OutputDir=..\..\dist

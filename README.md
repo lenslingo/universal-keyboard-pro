@@ -1,5 +1,7 @@
 # Universal Keyboard Pro (UK Pro) — v0.2.0
 
+Developed by **Md. Marufur Rahman Moni**.
+
 Android ⇄ Windows: bidirectional keyboard, universal clipboard (text / images / files), file
 transfer, remote control panel, clipboard history and multi-device — over the local network, no cloud.
 All languages: text typing and copy/paste carry any Unicode script (বাংলা, English, हिन्दी, اردو, العربية, 中文, 日本語, 한국어, emoji …).
