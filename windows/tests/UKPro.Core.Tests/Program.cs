@@ -378,7 +378,7 @@ static class Tests
         var hub = new UkHub(new HubOptions
         {
             DeviceId = "win-test", Name = "Test Laptop", Certificate = Certificates.CreateSelfSigned("test"),
-            Port = 47900 + Random.Shared.Next(0, 2000), PingInterval = TimeSpan.FromMilliseconds(500),
+            Port = 0 /* OS-assigned: CI runners reserve port blocks */, PingInterval = TimeSpan.FromMilliseconds(500),
         }, store) { ApprovePairing = _ => Task.FromResult(approve) };
         hub.Start();
         await Task.Delay(50);

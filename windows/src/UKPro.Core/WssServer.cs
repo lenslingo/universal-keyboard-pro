@@ -104,7 +104,11 @@ public sealed class WssServer : IAsyncDisposable
     /// <summary>Binds the port (or the next free one, up to +20) and starts accepting.</summary>
     public void Start()
     {
-        for (int p = Port; p < Port + 20; p++)
+        // Try the preferred port and the next 19; Windows can reserve whole port blocks (Hyper-V/WSL
+        // "excluded port ranges", WSAEACCES), so finally fall back to any free port. QR + mDNS advertise the real one.
+        var candidates = Port == 0 ? [0] : Enumerable.Range(Port, 20).Append(0).ToArray();
+        SocketException? last = null;
+        foreach (var p in candidates)
         {
             try
             {
@@ -119,9 +123,10 @@ public sealed class WssServer : IAsyncDisposable
                 _listener = l; Port = ((IPEndPoint)l.LocalEndpoint).Port;
                 break;
             }
-            catch (SocketException) when (p < Port + 19) { }
+            catch (SocketException e) { last = e; }
         }
-        _ = AcceptLoop(_listener!, _cts.Token);
+        if (_listener is null) throw last ?? new SocketException((int)SocketError.AddressAlreadyInUse);
+        _ = AcceptLoop(_listener, _cts.Token);
     }
 
     private async Task AcceptLoop(TcpListener l, CancellationToken ct)
