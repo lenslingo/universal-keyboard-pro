@@ -147,6 +147,7 @@
                 <TextBlock Text="GENERAL" Style="{StaticResource H2}"/>
                 <CheckBox x:Name="SetAutostart" Content="Start with Windows (tray)"/>
                 <CheckBox x:Name="SetRemote" Content="Allow Remote Control Panel (Alt+Tab, Win+D, volume, media)"/>
+                <CheckBox x:Name="SetMouse" Content="Allow phone touchpad to control the mouse"/>
                 <CheckBox x:Name="SetImages" Content="Sync clipboard images"/>
                 <CheckBox x:Name="SetFiles" Content="Sync copied files"/>
                 <CheckBox x:Name="SetHistory" Content="Keep clipboard history (encrypted, this PC only)"/>

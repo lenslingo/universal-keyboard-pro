@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsRemote
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Mouse
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -73,6 +74,7 @@ import kotlinx.coroutines.launch
 enum class Screen(val title: String, val icon: ImageVector) {
     Home("Home", Icons.Filled.Home), Keyboard("Keyboard", Icons.Filled.Keyboard),
     Universal("Universal text (any language)", Icons.Filled.Translate),
+    Mouse("Touchpad / Mouse", Icons.Filled.Mouse),
     Remote("Remote Control", Icons.Filled.SettingsRemote), Clipboard("Clipboard", Icons.Filled.ContentPaste),
     Files("File Transfer", Icons.Filled.FolderCopy), Devices("Connected Devices", Icons.Filled.Devices),
     History("History", Icons.Filled.History), Settings("Settings", Icons.Filled.Settings),
@@ -135,6 +137,7 @@ private fun App() {
                     Screen.Home -> HomeScreen { screen = it }
                     Screen.Keyboard -> KeyboardScreen()
                     Screen.Universal -> UniversalTextScreen()
+                    Screen.Mouse -> MouseScreen()
                     Screen.Remote -> RemoteScreen()
                     Screen.Clipboard -> ClipboardScreen()
                     Screen.Files -> FilesScreen()
@@ -233,6 +236,8 @@ private fun HomeScreen(go: (Screen) -> Unit) {
         item {
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.Center) {
                 Button(onClick = { UkRuntime.setPaused(!s.paused) }) { Text(if (s.paused) "▶ Resume synchronization" else "⏸ Pause synchronization") }
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = { go(Screen.Mouse) }) { Text("Mouse") }
                 Spacer(Modifier.width(8.dp))
                 OutlinedButton(onClick = { go(Screen.Remote) }) { Text("Remote") }
             }

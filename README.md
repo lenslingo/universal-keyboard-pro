@@ -29,7 +29,7 @@ UKPro/
 | 8 Bluetooth + failover | ❌ not started (reliable channel already handles transport switches) |
 | 9 Security / performance / full tests | 🟡 security implemented; device testing pending |
 | 10 Release APK + installer | 🟡 scripts + CI ready; artifacts not built in this workspace |
-| Extra: multi-device, clipboard history, remote control panel | 🟡 implemented; hub multi-device tested |
+| Extra: multi-device, clipboard history, remote control panel, touchpad/mouse, ≈40 keyboard languages, movable/resizable keyboard, unlimited Wi-Fi transfers | 🟡 implemented; builds in CI; protocol parts tested |
 
 ✅ = implemented and tested here · 🟡 = implemented, needs compile/run on your devices · ❌ = not done.
 Nothing marked 🟡 is claimed to work on a device yet.

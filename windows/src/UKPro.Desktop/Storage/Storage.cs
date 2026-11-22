@@ -63,6 +63,7 @@ public sealed class Settings
     public int HistoryMaxItems { get; set; } = 200;
     public int HistoryRetentionDays { get; set; } = 30;
     public bool RemoteControlEnabled { get; set; } = true;
+    public bool MouseEnabled { get; set; } = true;
     public string DownloadFolder { get; set; } = AppPaths.DefaultDownloads;
     public string? ActiveKeyboardTarget { get; set; }
     public HashSet<string> ExcludedApps { get; set; } = new(StringComparer.OrdinalIgnoreCase);

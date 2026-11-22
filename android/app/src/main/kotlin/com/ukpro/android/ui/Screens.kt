@@ -507,3 +507,38 @@ fun UniversalTextScreen() {
         }
     }
 }
+
+
+// ------------------------------------------------------------------ Touchpad / mouse
+
+@Composable
+fun MouseScreen() {
+    val s by UkRuntime.settings.state.collectAsState()
+    val hubs by UkRuntime.hubs.collectAsState()
+    val target = hubs.firstOrNull { it.isActive && it.connected }
+    LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+        item {
+            UkCard(if (target != null) "Mouse for ${target.name}" else "No laptop connected") {
+                Text("1 finger: move · tap: click · double-tap & hold or long-press: drag · 2 fingers: tap = right-click, slide = scroll · " +
+                    "right strip: scroll · buttons below: Left / Middle / Right (hold to drag). Also on the keyboard: 🖱.",
+                    style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        item {
+            AndroidView(factory = { ctx -> com.ukpro.android.keyboard.TouchpadView(ctx).apply { sink = UkRuntime.mouse } },
+                update = { v ->
+                    v.sensitivity = s.mouseSensitivity; v.scrollSpeed = s.scrollSpeed; v.naturalScroll = s.naturalScroll
+                    v.dark = s.darkTheme; v.heightScale = 1.5f
+                }, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
+        }
+        item {
+            UkCard("Settings") {
+                Text("Pointer speed: ${"%.1f".format(s.mouseSensitivity)}×")
+                Slider(value = s.mouseSensitivity, valueRange = 0.4f..4f, onValueChange = { v -> UkRuntime.settings.update { it.copy(mouseSensitivity = v) } })
+                Text("Scroll speed: ${"%.1f".format(s.scrollSpeed)}×")
+                Slider(value = s.scrollSpeed, valueRange = 0.3f..3f, onValueChange = { v -> UkRuntime.settings.update { it.copy(scrollSpeed = v) } })
+                ToggleRow("Natural scrolling (content follows fingers)", s.naturalScroll) { v -> UkRuntime.settings.update { it.copy(naturalScroll = v) } }
+            }
+        }
+    }
+}

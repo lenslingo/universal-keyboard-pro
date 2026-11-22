@@ -228,7 +228,7 @@ public partial class MainWindow : Window
     private void LoadSettingsIntoUi()
     {
         var s = _app.Settings;
-        SetAutostart.IsChecked = s.StartWithWindows; SetRemote.IsChecked = s.RemoteControlEnabled;
+        SetAutostart.IsChecked = s.StartWithWindows; SetRemote.IsChecked = s.RemoteControlEnabled; SetMouse.IsChecked = s.MouseEnabled;
         SetImages.IsChecked = s.ClipboardImages; SetFiles.IsChecked = s.ClipboardFiles; SetHistory.IsChecked = s.HistoryEnabled;
         SetDownload.Text = s.DownloadFolder;
         SetExcluded.Text = string.Join(Environment.NewLine, s.ExcludedApps);
@@ -238,7 +238,7 @@ public partial class MainWindow : Window
     private void OnSaveSettings(object sender, RoutedEventArgs e)
     {
         var s = _app.Settings;
-        s.StartWithWindows = SetAutostart.IsChecked == true; s.RemoteControlEnabled = SetRemote.IsChecked == true;
+        s.StartWithWindows = SetAutostart.IsChecked == true; s.RemoteControlEnabled = SetRemote.IsChecked == true; s.MouseEnabled = SetMouse.IsChecked == true;
         s.ClipboardImages = SetImages.IsChecked == true; s.ClipboardFiles = SetFiles.IsChecked == true; s.HistoryEnabled = SetHistory.IsChecked == true;
         s.DownloadFolder = SetDownload.Text.Trim().Length > 0 ? SetDownload.Text.Trim() : AppPaths.DefaultDownloads;
         static string[] Lines(string t) => t.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

@@ -115,7 +115,7 @@ public sealed class ReliableChannel
         {
             if (e.Seq == 0)
             {
-                if (e.Type is MessageTypes.Ping or MessageTypes.Pong or MessageTypes.Ack) return [e];
+                if (MessageTypes.IsStream(e.Type)) return [e];
                 return _seenEvents.Add(e.EventId) ? [e] : [];
             }
             if (_peerSessionId is null || e.SessionId != _peerSessionId) BeginPeerSessionUnlocked(e.SessionId);

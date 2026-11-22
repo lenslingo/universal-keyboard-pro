@@ -25,21 +25,25 @@ public static class MessageTypes
         RemoteAction = "REMOTE_ACTION", MediaControl = "MEDIA_CONTROL", VolumeSet = "VOLUME_SET",
         ClipboardHistoryRequest = "CLIPBOARD_HISTORY_REQUEST",
         ClipboardHistoryResponse = "CLIPBOARD_HISTORY_RESPONSE",
-        ClipboardHistoryApply = "CLIPBOARD_HISTORY_APPLY", ClipboardFetch = "CLIPBOARD_FETCH", DeviceList = "DEVICE_LIST";
+        ClipboardHistoryApply = "CLIPBOARD_HISTORY_APPLY", ClipboardFetch = "CLIPBOARD_FETCH", DeviceList = "DEVICE_LIST",
+        MouseMove = "MOUSE_MOVE", MouseButton = "MOUSE_BUTTON", MouseScroll = "MOUSE_SCROLL";
 
     private static readonly HashSet<string> Unreliable = new()
     {
         Ping, Pong, Ack, FileChunk, AuthHello, AuthChallenge, AuthResponse, AuthOk, AuthFail,
-        PairRequest, PairAccepted, PairRejected, PairInfo, DeviceStatus, Error
+        PairRequest, PairAccepted, PairRejected, PairInfo, DeviceStatus, Error, MouseMove, MouseScroll
     };
 
     /// <summary>Input events that must not be replayed if they waited too long in the outbox.</summary>
     private static readonly HashSet<string> TimeSensitive = new()
     {
-        KeyDown, KeyUp, TextCommit, CompositionCommit, RemoteAction, MediaControl, VolumeSet
+        KeyDown, KeyUp, TextCommit, CompositionCommit, RemoteAction, MediaControl, VolumeSet, MouseButton
     };
 
     public static bool IsReliable(string type) => !Unreliable.Contains(type);
+
+    /// <summary>High-rate, order-insensitive streams: no outbox, no event-id dedup (a lost move is simply skipped).</summary>
+    public static bool IsStream(string type) => type is Ping or Pong or Ack or MouseMove or MouseScroll;
     public static bool IsTimeSensitive(string type) => TimeSensitive.Contains(type);
 }
 

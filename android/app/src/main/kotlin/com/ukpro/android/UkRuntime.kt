@@ -158,6 +158,17 @@ object UkRuntime : HubEvents {
         for (c in connections.values) if (c.isConnected) c.session.send(type, LinkedHashMap(payload))
     }
 
+    /** Phone touchpad → laptop mouse (active laptop). Moves/scrolls are unreliable streams: never queued offline. */
+    val mouse = object : com.ukpro.android.keyboard.MouseSink {
+        private fun send(type: String, p: MutableMap<String, Any?>) {
+            if (settings.current.paused) return
+            activeConnection()?.session?.send(type, p)
+        }
+        override fun move(dx: Int, dy: Int) = send(MessageTypes.MOUSE_MOVE, linkedMapOf("dx" to dx.toLong(), "dy" to dy.toLong()))
+        override fun scroll(dx: Int, dy: Int) = send(MessageTypes.MOUSE_SCROLL, linkedMapOf("dx" to dx.toLong(), "dy" to dy.toLong()))
+        override fun button(button: String, action: String) = send(MessageTypes.MOUSE_BUTTON, linkedMapOf("button" to button, "action" to action))
+    }
+
     fun connectedHubs(): List<HubConnection> = connections.values.filter { it.isConnected }
     fun connection(id: String): HubConnection? = connections[id]
 

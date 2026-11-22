@@ -67,6 +67,12 @@ object InteropClient {
             val e = next(MessageTypes.KEY_DOWN)
             check(e.str("code") == "KeyC" && e.long("mods") == 1L, "key mismatch")
         }
+        step("touchpad stream: MOUSE_MOVE ×200 + click accepted by the hub") {
+            repeat(200) { session.send(MessageTypes.MOUSE_MOVE, payloadOf("dx" to 3L, "dy" to -2L)) }
+            session.send(MessageTypes.MOUSE_BUTTON, payloadOf("button" to "left", "action" to "click"))
+            check(next(MessageTypes.MOUSE_BUTTON).str("action") == "click", "click echo")
+            check(session.channel.outboxCount <= 2, "moves must not be queued")
+        }
         step("clipboard: hub verifies hash, then rejects duplicate clipId") {
             val resolver = ClipboardResolver(session.deviceId)
             val text = "কপি করা লেখা\r\nline 2"

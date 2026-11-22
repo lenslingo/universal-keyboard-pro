@@ -74,6 +74,8 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
     private lateinit var bottomSpacer: View
     private var navInset = 0
     private var liveOffsetDp = -1 // while dragging, before it is saved
+    private var touchpad: com.ukpro.android.keyboard.TouchpadView? = null
+    private var mouseMode = false
     /** Korean / Japanese / Vietnamese: text stays composing (underlined) until committed; only commits go to the PC. */
     private var composer: com.ukpro.core.Composer? = null
     private var composerLang: String? = null
@@ -144,6 +146,7 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
         outputView = chip(outputLabel()) { cycleOutput() }
         bar.addView(statusView)
         bar.addView(outputView)
+        bar.addView(chip("🖱") { toggleMouse() })
         bar.addView(chip("⇕") { adjustPanel.visibility = if (adjustPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE })
         bar.addView(chip("📋→PC") { UkRuntime.clipboard.onLocalClip(cm.primaryClip, manual = true); UkRuntime.toast("Clipboard sent") })
         bar.addView(chip(if (s.paused) "▶" else "⏸") { UkRuntime.setPaused(!UkRuntime.settings.current.paused); updateStatus() })
@@ -170,6 +173,20 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
         return root
     }
 
+    /** Swap the keyboard for a touchpad (and back) inside the same IME window. */
+    private fun toggleMouse() {
+        mouseMode = !mouseMode
+        val pad = touchpad ?: com.ukpro.android.keyboard.TouchpadView(this).also {
+            it.sink = UkRuntime.mouse
+            touchpad = it
+            keyboardHolder.addView(it, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        commitComposition()
+        pad.visibility = if (mouseMode) View.VISIBLE else View.GONE
+        keyboard.visibility = if (mouseMode) View.GONE else View.VISIBLE
+        applySettings()
+    }
+
     private fun currentOffsetDp() = if (liveOffsetDp >= 0) liveOffsetDp else UkRuntime.settings.current.keyboardOffsetDp
     private fun maxOffsetDp() = (resources.displayMetrics.heightPixels / resources.displayMetrics.density / 2).toInt()
 
@@ -191,6 +208,14 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
         val s = UkRuntime.settings.current
         keyboard.heightScale = s.keyboardHeight
         keyboard.dark = s.darkTheme; keyboard.sound = s.keySound; keyboard.vibration = s.vibration
+        touchpad?.let { t ->
+            t.heightScale = s.keyboardHeight; t.dark = s.darkTheme
+            t.sensitivity = s.mouseSensitivity; t.scrollSpeed = s.scrollSpeed; t.naturalScroll = s.naturalScroll
+            val lp = t.layoutParams as android.widget.FrameLayout.LayoutParams
+            lp.width = (keyboard.layoutParams as android.widget.FrameLayout.LayoutParams).width
+            lp.gravity = (keyboard.layoutParams as android.widget.FrameLayout.LayoutParams).gravity
+            t.layoutParams = lp
+        }
         val lang = Languages.byId(s.language)
         if (lang.id != composerLang) {
             commitComposition()

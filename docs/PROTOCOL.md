@@ -140,6 +140,15 @@ Sensitive clips (Android `EXTRA_IS_SENSITIVE`, Windows `ExcludeClipboardContentF
 `VOLUME_SET {level:0..100}` — absolute master volume (Core Audio).
 `DEVICE_STATUS` from Windows includes `{volume, muted, foregroundApp, kbCapture, ...}`.
 
+### 3.4b Touchpad / mouse (extension)
+
+`MOUSE_MOVE {dx, dy}` and `MOUSE_SCROLL {dx, dy}` are unreliable streams (`seq = 0`, no outbox, no
+dedup): a move lost on a dropped link is simply skipped, never replayed later. `dx/dy` of MOUSE_MOVE are
+pixels (already accelerated on the phone); MOUSE_SCROLL uses Windows wheel units (120 = one notch,
+smaller values scroll smoothly). `MOUSE_BUTTON {button: left|right|middle, action: down|up|click|double}`
+is reliable and time-sensitive (dropped, not replayed, after 10 s). Windows releases any button still
+held when the phone disconnects.
+
 ### 3.5 Device / config
 
 `DEVICE_STATUS {name, platform, battery?, volume?, muted?, transport, features…}` (unreliable).

@@ -25,6 +25,7 @@ var tests = new (string Name, Func<Task> Body)[]
     ("reliable: ACK trims outbox, resend after reconnect", Tests.ReliableResend),
     ("reliable: stale keystrokes become NOOP, never replayed", Tests.ReliableStaleInput),
     ("reliable: new peer session resets inbound state", Tests.ReliableNewSession),
+    ("mouse moves are an unqueued stream; clicks are reliable but never replayed late", Tests.MouseStream),
     ("pairing: both sides derive the same secret", Tests.PairingAgreement),
     ("pairing: wrong code fails confirmation", Tests.PairingWrongCode),
     ("pairing: code normalisation", Tests.CodeNormalise),
@@ -212,6 +213,22 @@ static class Tests
         var tx2 = new ReliableChannel("A"); // app restarted
         Assert.Eq(1, rx.Receive(Wire(Msg(tx2))).Count);
         Assert.Eq(1L, rx.LastDelivered);
+        return Task.CompletedTask;
+    }
+
+    public static Task MouseStream()
+    {
+        long now = 1_000_000;
+        var tx = new ReliableChannel("A", clockMs: () => now); var rx = new ReliableChannel("B");
+        var m1 = Wire(tx.Stamp(Envelope.Create(MessageTypes.MouseMove, new JsonObject { ["dx"] = 5, ["dy"] = -3 })));
+        var m2 = Wire(tx.Stamp(Envelope.Create(MessageTypes.MouseMove, new JsonObject { ["dx"] = 5, ["dy"] = -3 })));
+        Assert.Eq(0L, m1.Seq, "moves are not sequenced");
+        Assert.Eq(0, tx.OutboxCount, "moves are never queued for replay");
+        Assert.Eq(1, rx.Receive(m1).Count); Assert.Eq(1, rx.Receive(m2).Count);
+        tx.Stamp(Envelope.Create(MessageTypes.MouseButton, new JsonObject { ["button"] = "left", ["action"] = "click" }));
+        Assert.Eq(1, tx.OutboxCount, "clicks are reliable");
+        now += 11_000;
+        Assert.Eq("NOOP", tx.ResendAfterReconnect(tx.LocalSessionId, 0)[0].Type, "a click older than 10 s is never replayed");
         return Task.CompletedTask;
     }
 

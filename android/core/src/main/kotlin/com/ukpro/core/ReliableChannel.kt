@@ -69,7 +69,7 @@ class ReliableChannel(
     /** Messages that became deliverable, in order. Empty for duplicates and gaps. */
     fun receive(e: Envelope): List<Envelope> = synchronized(lock) {
         if (e.seq == 0L) {
-            if (e.type == MessageTypes.PING || e.type == MessageTypes.PONG || e.type == MessageTypes.ACK) return listOf(e)
+            if (MessageTypes.isStream(e.type)) return listOf(e)
             return if (seen.add(e.eventId)) listOf(e) else emptyList()
         }
         if (peerSession == null || e.sessionId != peerSession) resetInbound(e.sessionId)

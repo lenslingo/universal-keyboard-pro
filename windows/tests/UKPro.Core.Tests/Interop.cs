@@ -73,7 +73,7 @@ static class InteropHub
             switch (e.Type)
             {
                 case MessageTypes.TextCommit or MessageTypes.CompositionCommit or MessageTypes.KeyDown or MessageTypes.KeyUp
-                    or MessageTypes.MediaControl:
+                    or MessageTypes.MediaControl or MessageTypes.MouseButton:
                     _ = hub.SendAsync(peer.Device.DeviceId, e.Type, (JsonObject)e.Payload.DeepClone());
                     break;
                 case MessageTypes.ClipboardText:

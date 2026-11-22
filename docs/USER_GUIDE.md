@@ -46,6 +46,13 @@ Several phones can pair with one laptop, and one phone with several laptops.
 * Modifiers: tap once = next key only, double-tap = lock, or hold with one finger.
 * **Nav** shows Insert/Home/End/PgUp/PgDn/arrows and the numeric keypad.
 
+### Touchpad / mouse
+Tap **🖱** on the keyboard toolbar (or phone menu → *Touchpad / Mouse*). One finger moves the pointer,
+tap = click, double-tap-and-hold or long-press = drag, two-finger tap = right-click, two-finger slide =
+scroll, the right-hand strip scrolls, and the Left / Middle / Right buttons can be held for dragging.
+Pointer speed, scroll speed and natural scrolling are in *Touchpad / Mouse*. The laptop can switch the
+touchpad off in *Settings → Allow phone touchpad*.
+
 ### Remote Control (phone menu → Remote Control)
 Alt+Tab, Win+D, Win+E, Win+Tab, Task Manager (Ctrl+Shift+Esc), Alt+F4, Print Screen, Lock,
 volume slider/mute, play/pause, next, previous.

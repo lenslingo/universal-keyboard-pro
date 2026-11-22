@@ -24,13 +24,16 @@ object MessageTypes {
     const val CLIPBOARD_HISTORY_RESPONSE = "CLIPBOARD_HISTORY_RESPONSE"
     const val CLIPBOARD_HISTORY_APPLY = "CLIPBOARD_HISTORY_APPLY"; const val CLIPBOARD_FETCH = "CLIPBOARD_FETCH"
     const val DEVICE_LIST = "DEVICE_LIST"
+    const val MOUSE_MOVE = "MOUSE_MOVE"; const val MOUSE_BUTTON = "MOUSE_BUTTON"; const val MOUSE_SCROLL = "MOUSE_SCROLL"
 
     private val unreliable = setOf(PING, PONG, ACK, FILE_CHUNK, AUTH_HELLO, AUTH_CHALLENGE, AUTH_RESPONSE, AUTH_OK,
-        AUTH_FAIL, PAIR_REQUEST, PAIR_ACCEPTED, PAIR_REJECTED, PAIR_INFO, DEVICE_STATUS, ERROR)
-    private val timeSensitive = setOf(KEY_DOWN, KEY_UP, TEXT_COMMIT, COMPOSITION_COMMIT, REMOTE_ACTION, MEDIA_CONTROL, VOLUME_SET)
+        AUTH_FAIL, PAIR_REQUEST, PAIR_ACCEPTED, PAIR_REJECTED, PAIR_INFO, DEVICE_STATUS, ERROR, MOUSE_MOVE, MOUSE_SCROLL)
+    private val timeSensitive = setOf(KEY_DOWN, KEY_UP, TEXT_COMMIT, COMPOSITION_COMMIT, REMOTE_ACTION, MEDIA_CONTROL, VOLUME_SET, MOUSE_BUTTON)
 
     fun isReliable(type: String) = type !in unreliable
     fun isTimeSensitive(type: String) = type in timeSensitive
+    /** High-rate, order-insensitive streams: no outbox, no event-id dedup. */
+    fun isStream(type: String) = type == PING || type == PONG || type == ACK || type == MOUSE_MOVE || type == MOUSE_SCROLL
 }
 
 object KeyMods {

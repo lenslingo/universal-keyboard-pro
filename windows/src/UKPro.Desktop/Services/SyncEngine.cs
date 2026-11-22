@@ -29,6 +29,7 @@ public sealed class SyncEngine : IDisposable
     private readonly Settings _s;
     private readonly Dispatcher _ui;
     private readonly KeyboardInjector _injector = new();
+    private readonly MouseInjector _mouse = new();
     private readonly PrivacyGuard _guard;
     private readonly KeyboardCapture _capture;
     private readonly ClipboardService _clipboard;
@@ -55,7 +56,7 @@ public sealed class SyncEngine : IDisposable
         _clipboard.LocalChanged += c => _ = OnLocalClipboardAsync(c);
         hub.MessageReceived += OnMessage;
         hub.PeerConnected += p => _ = OnPeerConnectedAsync(p);
-        hub.PeerDisconnected += p => { _phoneFocus.TryRemove(p.Device.DeviceId, out _); StatusChanged?.Invoke(); _ = SendDeviceListAsync(); };
+        hub.PeerDisconnected += p => { _mouse.ReleaseAll(); _phoneFocus.TryRemove(p.Device.DeviceId, out _); StatusChanged?.Invoke(); _ = SendDeviceListAsync(); };
         ApplyCaptureState();
     }
 
@@ -191,6 +192,28 @@ public sealed class SyncEngine : IDisposable
         }
     }
 
+    // =================================================================== touchpad → mouse
+
+    private void HandleMouse(PeerSession peer, Envelope e)
+    {
+        if (!_s.MouseEnabled || Paused) return;
+        var c = _guard.Current();
+        if (c.SecureDesktop) return;
+        switch (e.Type)
+        {
+            case MessageTypes.MouseMove:
+                _mouse.Move((int)Math.Clamp(e.Long("dx"), -4000, 4000), (int)Math.Clamp(e.Long("dy"), -4000, 4000));
+                break;
+            case MessageTypes.MouseScroll:
+                _mouse.Scroll((int)Math.Clamp(e.Long("dx"), -2400, 2400), (int)Math.Clamp(e.Long("dy"), -2400, 2400));
+                break;
+            case MessageTypes.MouseButton:
+                if (c.IsElevated) { _ = ReplyError(peer, "ELEVATED_TARGET", e.Type); }
+                _mouse.Button(e.Str("button", "left"), e.Str("action", "click"));
+                break;
+        }
+    }
+
     // =================================================================== message routing
 
     private void OnMessage(PeerSession peer, Envelope e)
@@ -200,6 +223,8 @@ public sealed class SyncEngine : IDisposable
         {
             case MessageTypes.TextCommit or MessageTypes.CompositionCommit or MessageTypes.KeyDown or MessageTypes.KeyUp:
                 HandleInput(peer, e); break;
+            case MessageTypes.MouseMove or MessageTypes.MouseScroll or MessageTypes.MouseButton:
+                HandleMouse(peer, e); break;
             case MessageTypes.InputFocus:
                 _phoneFocus[id] = new PhoneFocus(e.Bool("editable"), e.Bool("password"), e.Str("app"));
                 StatusChanged?.Invoke(); break;
