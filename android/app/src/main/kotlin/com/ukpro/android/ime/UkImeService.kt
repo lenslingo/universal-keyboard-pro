@@ -79,6 +79,9 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
     private var liveOffsetDp = -1 // while dragging, before it is saved
     private var touchpad: com.ukpro.android.keyboard.TouchpadView? = null
     private var clipStrip: ClipStrip? = null
+    private lateinit var suggestBar: LinearLayout
+    /** After Space auto-corrected a word: (what was committed, what the user typed) — Backspace undoes it. */
+    private var lastCorrection: Pair<String, String>? = null
     private var mouseMode = false
     /** Korean / Japanese / Vietnamese: text stays composing (underlined) until committed; only commits go to the PC. */
     private var composer: com.ukpro.core.Composer? = null
@@ -162,7 +165,19 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
         bottomSpacer = View(this)
 
         clipStrip = ClipStrip(this, s.darkTheme) { item -> pasteFromStrip(item) }
+        suggestBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; visibility = View.GONE; setPadding(dp(4), dp(4), dp(4), 0)
+            for (k in 0 until 3) addView(TextView(this@UkImeService).apply {
+                setTextColor(fg); textSize = 17f; gravity = Gravity.CENTER; maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(dp(4), dp(8), dp(4), dp(8))
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(4) }
+                background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(10).toFloat(); setColor(chipBg) }
+                setOnClickListener { (tag as? String)?.let { w -> pickSuggestion(w) } }
+            })
+        }
         root.addView(adjustPanel)
+        root.addView(suggestBar)
         root.addView(clipStrip!!.view)
         root.addView(bar)
         root.addView(keyboardHolder, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -223,10 +238,12 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
             t.layoutParams = lp
         }
         val lang = Languages.byId(s.language)
-        if (lang.id != composerLang) {
+        val composerKey = "${lang.id}|${s.suggestions}"
+        if (composerKey != composerLang) {
             commitComposition()
             composer = lang.composer?.invoke()
-            composerLang = lang.id
+            composerLang = composerKey
+            if (composer != null && s.suggestions) UkRuntime.loadDictionaries()
         }
         keyboard.layoutDirection = View.LAYOUT_DIRECTION_LTR // physical layout stays left-to-right even for RTL scripts
         keyboard.setRows(if (showPanel) KeyboardLayouts.navPanel() else KeyboardLayouts.main(lang))
@@ -319,11 +336,20 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
         val toPc = mode != OutputMode.PHONE_ONLY && !password
         // Win-key and Alt combos only make sense on Windows (Win+D, Alt+Tab, Alt+F4…)
         val pcOnlyCombo = mods and (KeyMods.META or KeyMods.ALT) != 0
+        val undo = lastCorrection
+        lastCorrection = null
+        if (undo != null && key.code == "Backspace" && !shortcut && (composer?.composing ?: "").isEmpty()) {
+            revertCorrection(undo, toPhone, toPc); return
+        }
         if (key.kind == KeyKind.CHAR && !shortcut && text != null) {
             val c = composer
             if (c != null) {
+                val raw = c.composing
                 val committed = c.input(text)
-                if (committed.isNotEmpty()) emitCommit(committed, toPhone, toPc)
+                if (committed.isNotEmpty()) {
+                    emitCommit(committed, toPhone, toPc)
+                    if (text == " " && raw.isNotEmpty() && committed != "$raw ") lastCorrection = committed to raw
+                }
                 showComposing(toPhone)
                 return
             }
@@ -371,6 +397,46 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
             else "File copied to the clipboard")
     }
 
+    /** Gboard-style: suggestions while a word is being typed, the clipboard strip otherwise. */
+    private fun updateSuggestions() {
+        if (!::suggestBar.isInitialized) return
+        val words = if (UkRuntime.settings.current.suggestions) composer?.suggestions() ?: emptyList() else emptyList()
+        if (words.isEmpty()) {
+            suggestBar.visibility = View.GONE
+            clipStrip?.view?.let { if (UkRuntime.settings.current.clipStrip) clipStrip?.refresh() }
+            return
+        }
+        clipStrip?.view?.visibility = View.GONE
+        suggestBar.visibility = View.VISIBLE
+        for (k in 0 until 3) {
+            val tv = suggestBar.getChildAt(k) as TextView
+            val w = words.getOrNull(k)
+            tv.text = w ?: ""; tv.tag = w; tv.visibility = if (w == null) View.INVISIBLE else View.VISIBLE
+            tv.typeface = if (k == 0) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+        }
+    }
+
+    private fun pickSuggestion(word: String) {
+        val c = composer ?: return
+        val mode = UkRuntime.settings.current.outputMode
+        val text = c.pick(word)
+        emitCommit(text, mode != OutputMode.PC_ONLY, mode != OutputMode.PHONE_ONLY && !password)
+        showComposing(mode != OutputMode.PC_ONLY)
+    }
+
+    /** Backspace right after an auto-correction restores what was typed (phone and PC). */
+    private fun revertCorrection(c: Pair<String, String>, toPhone: Boolean, toPc: Boolean) {
+        val (committed, raw) = c
+        if (toPhone) { currentInputConnection?.deleteSurroundingText(committed.length, 0); currentInputConnection?.commitText(raw, 1) }
+        if (toPc) {
+            repeat(committed.codePointCount(0, committed.length)) {
+                val p = linkedMapOf<String, Any?>("code" to "Backspace", "key" to "", "mods" to 0L, "repeat" to false)
+                UkRuntime.sendInput(MessageTypes.KEY_DOWN, p); UkRuntime.sendInput(MessageTypes.KEY_UP, LinkedHashMap(p))
+            }
+            UkRuntime.sendInput(MessageTypes.COMPOSITION_COMMIT, linkedMapOf("text" to raw, "composer" to "undo-autocorrect"))
+        }
+    }
+
     private fun emitCommit(text: String, toPhone: Boolean, toPc: Boolean) {
         if (toPhone) currentInputConnection?.commitText(text, 1)
         if (toPc) UkRuntime.sendInput(MessageTypes.COMPOSITION_COMMIT, linkedMapOf("text" to text, "composer" to (composerLang ?: "")))
@@ -378,6 +444,7 @@ class UkImeService : InputMethodService(), KeyboardActionListener, RemoteInputSi
 
     private fun showComposing(toPhone: Boolean) {
         val comp = composer?.composing ?: ""
+        updateSuggestions()
         if (toPhone) currentInputConnection?.setComposingText(comp, 1)
         else if (::statusView.isInitialized) statusView.text = if (comp.isEmpty()) statusView.text else "✎ $comp"
     }

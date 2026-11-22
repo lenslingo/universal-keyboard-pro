@@ -42,7 +42,7 @@ class Lang(
     /** Latin layouts: the key code follows the letter (AZERTY "a" sends KeyA) so Ctrl+A stays Ctrl+A. */
     val latin: Boolean = false,
     /** Scripts that need composition (Korean, Japanese, Vietnamese Telex). */
-    val composer: (() -> com.ukpro.core.Composer)? = null,
+    val composer: (() -> com.ukpro.core.Composer?)? = null,
     val group: String = "",
 )
 
@@ -69,7 +69,7 @@ object Languages {
     /** Latin-script language: QWERTY (or AZERTY / QWERTZ letter swaps) with its own accents first on long-press. */
     private fun latin(id: String, label: String, name: String, space: String, first: Map<Char, List<String>> = emptyMap(),
                       swaps: Map<Char, Char> = emptyMap(), punct: Map<String, Pair<String, String>> = emptyMap(),
-                      composer: (() -> com.ukpro.core.Composer)? = null) =
+                      composer: (() -> com.ukpro.core.Composer?)? = null) =
         Lang(id, label, name, space, QWERTY.associate { pos ->
             val c = swaps[pos] ?: pos
             pos to Triple(c.toString(), c.uppercaseChar().toString(), ((first[c] ?: emptyList()) + (latinAccents[c] ?: emptyList())).distinct())
@@ -78,7 +78,17 @@ object Languages {
     private val azerty = mapOf('q' to 'a', 'a' to 'q', 'w' to 'z', 'z' to 'w')
     private val qwertz = mapOf('y' to 'z', 'z' to 'y')
 
-    val english = latin("en", "EN", "English (+ accents: á ç ñ ü ß …)", "English")
+    private val sg = { com.ukpro.android.UkRuntime.suggester }
+    private val ac = { com.ukpro.android.UkRuntime.settings.current.autoCorrect }
+
+    val english = latin("en", "EN", "English (+ accents, suggestions, auto-correct)", "English",
+        composer = { if (com.ukpro.android.UkRuntime.settings.current.suggestions) com.ukpro.core.EnglishWordComposer(sg, ac) else null })
+
+    /** Avro-style phonetic: type Bangla with English letters (ami banglay gan gai → আমি বাংলায় গান গাই). */
+    val banglaPhonetic = latin("bn-ph", "অA", "বাংলা ফোনেটিক — English অক্ষরে বাংলা (ami → আমি)", "বাংলা ফোনেটিক",
+        composer = { com.ukpro.core.BanglaPhoneticComposer(sg, ac) }).let {
+        Lang(it.id, it.label, it.name, it.spaceLabel, it.letters, it.punct, it.digits, it.rtl, it.latin, it.composer, "South Asia")
+    }
 
     /** Phonetic-position Bangla ("UK Pro Bangla"). Juktakkhor: consonant + q (্) + consonant. */
     val bangla = Lang("bn", "বাং", "বাংলা (Bangla)", "বাংলা", mapOf(
@@ -168,6 +178,7 @@ object Languages {
         latin("tl", "TL", "Filipino", "Filipino", first = mapOf('n' to listOf("ñ"))),
         latin("vi", "VI", "Tiếng Việt (Telex: aa=â, ow=ơ, dd=đ, s f r x j = dấu)", "Tiếng Việt", composer = { com.ukpro.core.TelexComposer() }),
         // ---- South Asia
+        banglaPhonetic,
         bangla,
         devanagariLang("hi", "हि", "हिन्दी (Hindi)", "हिन्दी"),
         devanagariLang("mr", "मर", "मराठी (Marathi)", "मराठी"),

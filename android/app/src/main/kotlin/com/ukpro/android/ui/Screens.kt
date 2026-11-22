@@ -86,6 +86,8 @@ fun KeyboardScreen() {
                 ToggleRow("Key sound", s.keySound) { v -> UkRuntime.settings.update { it.copy(keySound = v) } }
                 ToggleRow("Vibration", s.vibration) { v -> UkRuntime.settings.update { it.copy(vibration = v) } }
                 ToggleRow("Clipboard strip above the keyboard (tap to paste)", s.clipStrip) { v -> UkRuntime.settings.update { it.copy(clipStrip = v) } }
+                ToggleRow("Word suggestions (English + বাংলা ফোনেটিক)", s.suggestions) { v -> UkRuntime.settings.update { it.copy(suggestions = v) } }
+                ToggleRow("Auto-correction on Space (Backspace right after undoes it)", s.autoCorrect) { v -> UkRuntime.settings.update { it.copy(autoCorrect = v) } }
             }
         }
         item {
@@ -106,6 +108,9 @@ fun KeyboardScreen() {
         item {
             UkCard("How it works") {
                 Text("• Tap Ctrl/Shift/Alt/⊞ once = next key only; double-tap = locked; or hold it with one finger.\n" +
+                    "• বাংলা ফোনেটিক: type Bangla with English letters — ami banglay gan gai → আমি বাংলায় গান গাই; " +
+                    "kh খ, gh ঘ, ch ছ, Th ঠ, Dh ঢ, sh শ, S ষ, R ড়, ng ং, O ো, oi ৈ, ou ৌ, y/Z after a consonant = য-ফলা, w = ব-ফলা. " +
+                    "Suggestions above the keyboard fix ambiguous spellings (korte → করতে, tomake → তোমাকে).\n" +
                     "• Long-press a key for alternatives (বাংলা: া → আ, ি → ী, ু → ূ, দ → ড ঢ, ত → ট ঠ …). " +
                     "Juktakkhor: consonant + q (্) + consonant, e.g. ক q ষ = ক্ষ.\n" +
                     "• Nav opens Ins/Home/End/PgUp/PgDn and the numeric keypad.\n" +
@@ -575,6 +580,11 @@ fun AboutScreen() {
             UkCard("Privacy") {
                 Text("Keystrokes are never logged or stored. Password fields are never mirrored. Pairing secrets stay in the Android Keystore.",
                     style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        item {
+            UkCard("Credits") {
+                Text("Suggestion word lists: wordfreq by Robyn Speer (CC BY-SA 4.0).", style = MaterialTheme.typography.bodySmall)
             }
         }
         item { Text("© 2026 $DEVELOPER_NAME", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(16.dp)) }

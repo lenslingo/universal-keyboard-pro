@@ -14,6 +14,10 @@ interface Composer {
     fun backspace(): Boolean
     /** Commits everything pending and resets. */
     fun flush(): String
+    /** Word suggestions for the current composition (shown above the keyboard). */
+    fun suggestions(): List<String> = emptyList()
+    /** User tapped a suggestion: returns the text to commit (word + space) and resets. */
+    fun pick(word: String): String { flush(); return "$word " }
 }
 
 /** Korean 2-set (Dubeolsik): compatibility jamo → Hangul syllables (U+AC00). */

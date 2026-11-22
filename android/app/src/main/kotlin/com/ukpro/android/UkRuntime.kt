@@ -71,6 +71,22 @@ object UkRuntime : HubEvents {
     val transferList = MutableStateFlow<List<TransferProgress>>(emptyList())
     val messages = MutableStateFlow<String?>(null)
 
+    /** English + Bangla dictionaries (40k words each, wordfreq data) for suggestions; loaded in the background. */
+    @Volatile var suggester: com.ukpro.core.Suggester? = null
+        private set
+    private var dictLoading = false
+
+    @Synchronized fun loadDictionaries() {
+        if (suggester != null || dictLoading) return
+        dictLoading = true
+        io.execute {
+            fun read(name: String, key: (String) -> String) = runCatching {
+                app.assets.open("dict/$name").bufferedReader(Charsets.UTF_8).useLines { com.ukpro.core.WordDictionary(it.toList().asSequence(), key) }
+            }.getOrNull()
+            suggester = com.ukpro.core.Suggester(read("bn.txt") { com.ukpro.core.BanglaPhonetic.skeleton(it) }, read("en.txt") { it })
+        }
+    }
+
     fun init(ctx: Context) {
         if (::app.isInitialized) return
         app = ctx.applicationContext

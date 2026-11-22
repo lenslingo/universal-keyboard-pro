@@ -41,6 +41,15 @@ Several phones can pair with one laptop, and one phone with several laptops.
   Русский, Українська, Қазақша, Српски, Ελληνικά, ქართული, Հայերեն, ไทย, 한국어 (jamo → syllables), 日本語 (romaji → kana).
   Korean/Japanese/Vietnamese text is shown underlined while composing and goes to the PC only when committed.
   Indic conjuncts = consonant + `q` (্ / ् …) + consonant. Long-press keys for accents and extra letters.
+* **বাংলা ফোনেটিক (Avro-style)** — on by default: type Bangla with English letters, e.g. `ami tomake valobashi`
+  → আমি তোমাকে ভালোবাসি. While you type, the Bangla word is shown underlined and **suggestions** appear above
+  the keyboard (tap one to use it). **Space auto-corrects** to the dictionary spelling that sounds the same
+  (korte → করতে, tomake → তোমাকে); press **Backspace right after** to undo the correction.
+  Rules: kh খ, gh ঘ, ch ছ, jh ঝ, Th ঠ, Dh ঢ, th থ, dh ধ, sh শ, S ষ, R ড়, ng ং, Ng ঙ, O ো, oi ৈ, ou ৌ, rri ঋ,
+  y / Z after a consonant = য-ফলা (byakti), w after a consonant = ব-ফলা, `:` ঃ, `^` ঁ, `.` ।, digits → ০-৯.
+  Two consonants in a row join into a conjunct (kSh → ক্ষ); type `o` between them to keep them apart.
+* **English suggestions & auto-correct**: suggestions above the keyboard, Space fixes common typos
+  (teh → the, recieve → receive, helo → hello); names and capitalised words are left alone.
 * **Any other language** (Chinese, Japanese kanji …): phone menu → **Universal text** with any keyboard
   installed on your phone; on the laptop the **Remote text** tab with any Windows input method.
 * Modifiers: tap once = next key only, double-tap = lock, or hold with one finger.

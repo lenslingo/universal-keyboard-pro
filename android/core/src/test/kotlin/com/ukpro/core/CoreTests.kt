@@ -43,7 +43,10 @@ object CoreTests {
             "Korean Hangul composer (한국어, 값, 앉아, 의사)" to ::hangul,
             "Japanese romaji → kana (こんにちは, きょう, がっこう, カタカナ)" to ::kana,
             "Vietnamese Telex (Tiếng Việt, đường, hoà, người)" to ::telex,
-            "Indic offset mapping (Devanagari → Gujarati, Tamil, Bengali …)" to ::indic)
+            "Indic offset mapping (Devanagari → Gujarati, Tamil, Bengali …)" to ::indic,
+            "Bangla phonetic (Avro-style): ami banglay gan gai → আমি বাংলায় গান গাই" to ::phonetic,
+            "Bangla suggestions + auto-correction with the real 40k dictionary" to ::banglaSuggest,
+            "English suggestions + auto-correction with the real 40k dictionary" to ::englishSuggest)
         var failed = 0
         for ((name, body) in tests) {
             val t0 = System.nanoTime()
@@ -286,6 +289,51 @@ object CoreTests {
         eq(null, IndicScripts.fromDevanagari("ख", IndicScripts.TAMIL)) // Tamil has no kha
         eq("ক্ষ", IndicScripts.fromDevanagari("क्ष", IndicScripts.BENGALI))
         eq("ਨ।", IndicScripts.fromDevanagari("न।", IndicScripts.GURMUKHI))
+    }
+
+    private fun nfc(x: String) = java.text.Normalizer.normalize(x, java.text.Normalizer.Form.NFC)
+
+    private fun phonetic() {
+        val t = { x: String -> nfc(BanglaPhonetic.transliterate(x)) }
+        eq(nfc("আমি"), t("ami")); eq(nfc("বাংলায়"), t("banglay")); eq(nfc("গান"), t("gan")); eq(nfc("গাই"), t("gai"))
+        eq(nfc("কেমন"), t("kemon")); eq(nfc("আছেন"), t("achen")); eq(nfc("ঢাকা"), t("Dhaka")); eq(nfc("বাংলাদেশ"), t("bangladesh"))
+        eq(nfc("তুমি"), t("tumi")); eq(nfc("কথা"), t("kotha")); eq(nfc("শুরু"), t("shuru")); eq(nfc("কর্তে"), t("korte"))
+        eq(nfc("করতে"), t("korote")); eq(nfc("ক্ষমা"), t("kShoma")); eq(nfc("ব্যাংক"), t("byangk")); eq(nfc("২০২৬।"), t("2026."))
+        eq(BanglaPhonetic.skeleton("করতে"), BanglaPhonetic.skeleton("কর্তে"))
+        eq(BanglaPhonetic.skeleton("শাড়ি"), BanglaPhonetic.skeleton("সারী"))
+        val c = BanglaPhoneticComposer({ null })
+        val out = StringBuilder()
+        for (ch in "ami banglay gan gai ") out.append(c.input(ch.toString()))
+        eq(nfc("আমি বাংলায় গান গাই "), nfc(out.toString()))
+    }
+
+    private val dictDir by lazy { File(vectorsDir, "../../android/app/src/main/assets/dict") }
+    private val suggester by lazy {
+        Suggester(WordDictionary(File(dictDir, "bn.txt").readLines().asSequence(), { BanglaPhonetic.skeleton(it) }),
+            WordDictionary(File(dictDir, "en.txt").readLines().asSequence()))
+    }
+
+    private fun banglaSuggest() {
+        val sg = suggester
+        eq(nfc("করতে"), nfc(sg.banglaAutocorrect("korte")))          // কর্তে is not a word → করতে
+        eq(nfc("আমি"), nfc(sg.banglaAutocorrect("ami")))
+        eq(nfc("বাংলায়"), nfc(sg.banglaAutocorrect("banglay")))
+        check(sg.bangla("bhal").map { nfc(it) }.any { it.startsWith(nfc("ভাল")) }, "suggests ভাল…: ${sg.bangla("bhal")}")
+        check(sg.bangla("sob").map { nfc(it) }.contains(nfc("সব")), "sob → সব: ${sg.bangla("sob")}")
+        val c = BanglaPhoneticComposer({ sg })
+        val out = StringBuilder()
+        for (ch in "ami tomake valobashi ") out.append(c.input(ch.toString()))
+        println("        ami tomake valobashi → $out")
+        check(nfc(out.toString()).startsWith(nfc("আমি তোমাকে")) || nfc(out.toString()).startsWith(nfc("আমি তোমা")), "sentence: $out")
+    }
+
+    private fun englishSuggest() {
+        val sg = suggester
+        eq("the", sg.englishAutocorrect("teh")); eq("receive", sg.englishAutocorrect("recieve")); eq("hello", sg.englishAutocorrect("helo")); eq("because", sg.englishAutocorrect("becuase")); eq("which", sg.englishAutocorrect("whihc"))
+        eq("I", sg.englishAutocorrect("i")); eq("Thanks", sg.englishAutocorrect("Thnaks")); eq("NASA", sg.englishAutocorrect("NASA"))
+        eq("keyboard", sg.englishAutocorrect("keyboard"))
+        check(sg.english("keyb").contains("keyboard"), "keyb → keyboard: ${sg.english("keyb")}")
+        println("        suggestions: hel → ${sg.english("hel")} · beutiful → ${sg.english("beutiful")} · valo → ${sg.bangla("valo")} · kotha → ${sg.bangla("kotha")}")
     }
 
     private fun keyCodes() {

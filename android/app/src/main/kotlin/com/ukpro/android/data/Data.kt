@@ -52,7 +52,10 @@ data class AppSettings(
     val vibration: Boolean = true,
     /** Current keyboard language id (see keyboard.Languages) and the languages the 🌐 key cycles through. */
     val language: String = "en",
-    val languages: Set<String> = setOf("en", "bn"),
+    val languages: Set<String> = setOf("en", "bn-ph", "bn"),
+    /** Word suggestions above the keyboard and auto-correction on Space (English + Bangla phonetic). */
+    val suggestions: Boolean = true,
+    val autoCorrect: Boolean = true,
     val outputMode: OutputMode = OutputMode.BOTH,
     val connectionMode: ConnectionMode = ConnectionMode.AUTO,
     val activeHubId: String? = null,
@@ -74,6 +77,7 @@ class SettingsRepo(private val context: Context, private val scope: CoroutineSco
         val output = stringPreferencesKey("output"); val conn = stringPreferencesKey("conn")
         val hub = stringPreferencesKey("active_hub"); val nav = booleanPreferencesKey("nav_panel")
         val mouseSens = floatPreferencesKey("mouse_sens"); val scroll = floatPreferencesKey("scroll_speed"); val natural = booleanPreferencesKey("natural_scroll"); val clipStrip = booleanPreferencesKey("clip_strip")
+        val suggest = booleanPreferencesKey("suggestions"); val autocorrect = booleanPreferencesKey("autocorrect")
         val offset = intPreferencesKey("kb_offset"); val width = floatPreferencesKey("kb_width"); val align = stringPreferencesKey("kb_align")
     }
 
@@ -90,7 +94,8 @@ class SettingsRepo(private val context: Context, private val scope: CoroutineSco
                     paused = p[K.paused] ?: false, historyEnabled = p[K.history] ?: true,
                     historyMaxItems = p[K.historyMax] ?: 200, keyboardHeight = p[K.height] ?: 1.0f,
                     darkTheme = p[K.dark] ?: true, keySound = p[K.sound] ?: false, vibration = p[K.vib] ?: true,
-                    language = p[K.lang] ?: "en", languages = p[K.langs] ?: setOf("en", "bn"),
+                    language = p[K.lang] ?: "en", languages = p[K.langs] ?: setOf("en", "bn-ph", "bn"),
+                    suggestions = p[K.suggest] ?: true, autoCorrect = p[K.autocorrect] ?: true,
                     outputMode = p[K.output]?.let { runCatching { OutputMode.valueOf(it) }.getOrNull() } ?: OutputMode.BOTH,
                     connectionMode = p[K.conn]?.let { runCatching { ConnectionMode.valueOf(it) }.getOrNull() } ?: ConnectionMode.AUTO,
                     activeHubId = p[K.hub], showNavPanel = p[K.nav] ?: false,
@@ -110,6 +115,7 @@ class SettingsRepo(private val context: Context, private val scope: CoroutineSco
                 p[K.clipFiles] = n.clipboardFiles; p[K.paused] = n.paused; p[K.history] = n.historyEnabled
                 p[K.historyMax] = n.historyMaxItems; p[K.height] = n.keyboardHeight; p[K.dark] = n.darkTheme
                 p[K.sound] = n.keySound; p[K.vib] = n.vibration; p[K.lang] = n.language; p[K.langs] = n.languages
+                p[K.suggest] = n.suggestions; p[K.autocorrect] = n.autoCorrect
                 p[K.mouseSens] = n.mouseSensitivity; p[K.scroll] = n.scrollSpeed; p[K.natural] = n.naturalScroll; p[K.clipStrip] = n.clipStrip
                 p[K.offset] = n.keyboardOffsetDp; p[K.width] = n.keyboardWidth; p[K.align] = n.keyboardAlign
                 p[K.output] = n.outputMode.name; p[K.conn] = n.connectionMode.name; p[K.nav] = n.showNavPanel
