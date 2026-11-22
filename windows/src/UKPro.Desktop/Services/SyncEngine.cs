@@ -397,6 +397,8 @@ public sealed class SyncEngine : IDisposable
     private void OnTransferChanged(TransferInfo t)
     {
         StatusChanged?.Invoke();
+        if (t is { Direction: TransferDirection.Incoming, State: TransferState.Failed, Error: { } err })
+            Warning?.Invoke($"Could not receive {t.Name}: {err}. You can change the download folder in Settings.");
         if (t is not { Direction: TransferDirection.Incoming, State: TransferState.Completed, FinalPath: { } path }) return;
         if (t.Purpose == "clipboard" && _pendingClips.TryRemove(t.TransferId, out var pc))
         {

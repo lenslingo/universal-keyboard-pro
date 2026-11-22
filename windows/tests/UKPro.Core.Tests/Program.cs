@@ -42,6 +42,7 @@ var tests = new (string Name, Func<Task> Body)[]
     ("hub e2e: reconnect delivers queued messages exactly once", Tests.HubReconnect),
     ("hub e2e: bad MAC rejected, unknown device rejected", Tests.HubRejects),
     ("hub e2e: multi-device broadcast reaches every phone", Tests.HubMultiDevice),
+    ("transfer: receiver errors are reported at once with a reason (no 60 s timeout)", Tests.TransferErrorReported),
 };
 
 int failed = 0;
@@ -500,6 +501,29 @@ static class Tests
         Assert.Eq("to all", (await phones[2].NextAsync(MessageTypes.ClipboardText)).Str("text"));
         await Assert.Throws<Exception>(() => phones[0].NextAsync(MessageTypes.ClipboardText, 400));
         foreach (var p in phones) await p.DisposeAsync();
+    }
+
+    public static async Task TransferErrorReported()
+    {
+        var store = new InMemoryTrustStore();
+        var (hub, offer) = await StartHub(store);
+        await using var _ = hub;
+        var blocker = Path.Combine(TempDir(), "not-a-folder");
+        File.WriteAllText(blocker, "x"); // destination "folder" is a file → CreateDirectory throws
+        var tm = new TransferManager(hub, (_, _) => Path.Combine(blocker, "sub"));
+        var phone = new TestClient("and-tx", hub.Fingerprint, hub.Port);
+        await phone.AuthAsync(await phone.PairAsync(offer, hub.DeviceId));
+        var sw = Stopwatch.StartNew();
+        await phone.SendReliableAsync(MessageTypes.FileStart, new JsonObject
+        {
+            ["transferId"] = "t1", ["name"] = "photo.jpg", ["size"] = 7_000_000, ["mime"] = "image/jpeg",
+            ["sha256"] = new string('a', 64), ["chunkSize"] = 262144, ["purpose"] = "file",
+        });
+        var cancel = await phone.NextAsync(MessageTypes.FileCancel);
+        Assert.True(sw.ElapsedMilliseconds < 3000, "answered quickly");
+        Assert.True(cancel.Str("reason").Length > 0 && cancel.Str("reason") != "declined", "reason given: " + cancel.Str("reason"));
+        await phone.DisposeAsync();
+        GC.KeepAlive(tm);
     }
 
     public static async Task Wait(Func<bool> cond, string msg, int ms = 3000)

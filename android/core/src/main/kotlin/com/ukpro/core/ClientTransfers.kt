@@ -47,7 +47,7 @@ class ClientTransfers(
     /** No artificial size limit on Wi-Fi: the only limit is free storage space (checked per transfer). */
     var maxIncomingBytes = Long.MAX_VALUE
     /** Extra free space kept on the device after a transfer. */
-    var reserveBytes = 64L * 1024 * 1024
+    var reserveBytes = 16L * 1024 * 1024
     var acceptIncoming: (TransferProgress) -> Boolean = { true }
 
     fun sendFile(source: FileSource, chunkSize: Int = 256 * 1024, purpose: String = "file", attempts: Int = 5,
@@ -94,7 +94,7 @@ class ClientTransfers(
         set(p, TransferProgress.State.WAITING)
         session.send(MessageTypes.FILE_START, start)
         val resume = try { o.accepted.get(60, TimeUnit.SECONDS) } catch (e: java.util.concurrent.ExecutionException) { throw IOException(e.cause) }
-        if (resume < 0) throw ProtocolException("FEATURE_DISABLED", "receiver declined")
+        if (resume < 0) throw ProtocolException("FEATURE_DISABLED", p.error ?: "receiver declined")
         set(p, TransferProgress.State.RUNNING)
         val t0 = System.nanoTime(); var sent = 0L
         for (frame in tx.frames(resume)) {
@@ -146,7 +146,9 @@ class ClientTransfers(
             MessageTypes.FILE_RESULT -> outgoing[id]?.result?.complete(e.bool("ok"))
             MessageTypes.FILE_PAUSE -> outgoing[id]?.paused = e.bool("paused", true)
             MessageTypes.FILE_CANCEL -> {
-                outgoing[id]?.let { it.p.error = when (e.str("reason")) { "NO_SPACE" -> "Not enough free space on the laptop"; "" -> "cancelled"; else -> e.str("reason") }
+                outgoing[id]?.let { it.p.error = when (e.str("reason")) {
+                        "NO_SPACE" -> "The laptop's disk is full — free some space or choose another download folder in UK Pro (laptop) → Settings"
+                        "" -> "cancelled on the laptop"; else -> e.str("reason") }
                     it.cancelled = true; it.accepted.complete(-1) }
                 incoming.remove(id)?.let { it.rx.abort(true); set(it.p, TransferProgress.State.CANCELLED) }
             }
@@ -164,13 +166,26 @@ class ClientTransfers(
             t.p.transferred = t.rx.received
             t.p.bytesPerSecond = (t.p.transferred - t.startOffset) / Math.max((System.nanoTime() - t.startedAt) / 1e9, 0.001)
             onChange(t.p)
-        } catch (e: ProtocolException) {
-            t.p.error = e.message; set(t.p, TransferProgress.State.FAILED)
+        } catch (e: Exception) {
+            // ProtocolException, or IOException such as "No space left on device": fail this file, keep the link
+            incoming.remove(f.header.str("transferId"))
+            t.rx.abort(deletePartial = e !is java.io.IOException)
+            val full = e is java.io.IOException && (e.message ?: "").contains("ENOSPC", true) || (e.message ?: "").contains("No space", true)
+            t.p.error = if (full) "The phone's storage is full" else e.message
+            set(t.p, TransferProgress.State.FAILED)
+            session.send(MessageTypes.FILE_CANCEL, payloadOf("transferId" to t.p.transferId, "reason" to if (full) "NO_SPACE" else (e.message ?: "phone error")))
         }
         return true
     }
 
     private fun handleStart(e: Envelope) {
+        try { handleStartUnsafe(e) } catch (ex: Exception) {
+            session.send(MessageTypes.FILE_CANCEL, payloadOf("transferId" to e.str("transferId"),
+                "reason" to ("phone error: " + (ex.message ?: ex.javaClass.simpleName)).take(180)))
+        }
+    }
+
+    private fun handleStartUnsafe(e: Envelope) {
         val id = e.str("transferId")
         val p = TransferProgress(id, FileReceiver.safeFileName(e.str("name")), e.long("size"), true, e.str("purpose", "file"))
         if (p.size > maxIncomingBytes || !acceptIncoming(p)) {

@@ -57,7 +57,7 @@ public sealed class TransferManager
 
     /// <summary>No artificial size limit on Wi-Fi; only free disk space (plus <see cref="ReserveBytes"/>) limits a transfer.</summary>
     public long MaxIncomingBytes { get; set; } = long.MaxValue;
-    public long ReserveBytes { get; set; } = 256L * 1024 * 1024;
+    public long ReserveBytes { get; set; } = 16L * 1024 * 1024;
     public Func<TransferInfo, bool> AcceptIncoming { get; set; } = _ => true;
     public event Action<TransferInfo>? Changed;
     public IEnumerable<TransferInfo> All => _incoming.Values.Select(v => v.Info).Concat(_outgoing.Values.Select(o => o.Info));
@@ -164,7 +164,7 @@ public sealed class TransferManager
         var id = e.Str("transferId");
         switch (e.Type)
         {
-            case MessageTypes.FileStart: _ = HandleStartAsync(peer, e); break;
+            case MessageTypes.FileStart: _ = HandleStartSafeAsync(peer, e); break;
             case MessageTypes.FileAccept:
                 if (_outgoing.TryGetValue(id, out var oa)) oa.Accepted.TrySetResult(e.Long("resumeFrom"));
                 break;
@@ -188,6 +188,32 @@ public sealed class TransferManager
         }
     }
 
+    /// <summary>Any failure while preparing to receive is reported to the sender at once (never a silent 60 s timeout).</summary>
+    private async Task HandleStartSafeAsync(PeerSession peer, Envelope e)
+    {
+        try { await HandleStartAsync(peer, e).ConfigureAwait(false); }
+        catch (Exception ex)
+        {
+            try
+            {
+                await _hub.SendAsync(peer.Device.DeviceId, MessageTypes.FileCancel, new JsonObject
+                {
+                    ["transferId"] = e.Str("transferId"), ["reason"] = ReasonFor(ex),
+                }).ConfigureAwait(false);
+            }
+            catch (Exception) { /* link gone: the sender retries after reconnect */ }
+        }
+    }
+
+    private static string ReasonFor(Exception ex) => ex switch
+    {
+        IOException io when IsDiskFull(io) => "NO_SPACE",
+        UnauthorizedAccessException => "laptop cannot write to the download folder (permission denied)",
+        _ => ("laptop error: " + ex.Message).Length > 180 ? ("laptop error: " + ex.Message)[..180] : "laptop error: " + ex.Message,
+    };
+
+    private static bool IsDiskFull(IOException e) => (e.HResult & 0xFFFF) is 0x70 or 0x27; // ERROR_DISK_FULL, ERROR_HANDLE_DISK_FULL
+
     private async Task HandleStartAsync(PeerSession peer, Envelope e)
     {
         var id = e.Str("transferId");
@@ -208,7 +234,7 @@ public sealed class TransferManager
         if (FreeSpace(dir) is { } free && free < size - rx.ResumeFrom + ReserveBytes)
         {
             rx.Dispose();
-            info.Error = $"Not enough free disk space ({(size - rx.ResumeFrom) / 1048576} MB needed)";
+            info.Error = $"Not enough free disk space on {Path.GetPathRoot(Path.GetFullPath(dir))} ({(size - rx.ResumeFrom) / 1048576} MB needed, {free / 1048576} MB free)";
             Set(info, TransferState.Failed);
             await _hub.SendAsync(peer.Device.DeviceId, MessageTypes.FileCancel, new JsonObject { ["transferId"] = id, ["reason"] = "NO_SPACE" });
             return;
@@ -231,10 +257,16 @@ public sealed class TransferManager
             t.Info.BytesPerSecond = (t.Info.Transferred - t.StartOffset) / Math.Max(t.Clock.Elapsed.TotalSeconds, 0.001);
             Changed?.Invoke(t.Info);
         }
-        catch (ProtocolException ex)
+        catch (Exception ex) when (ex is ProtocolException or IOException or UnauthorizedAccessException)
         {
-            t.Info.Error = ex.Message;
+            _incoming.TryRemove(id, out _);
+            t.Rx.Abort(deletePartial: ex is not IOException); // keep the part on disk-full so it can resume later
+            t.Info.Error = ex is IOException io && IsDiskFull(io) ? "The laptop's disk is full" : ex.Message;
             Set(t.Info, TransferState.Failed);
+            _ = _hub.SendAsync(peer.Device.DeviceId, MessageTypes.FileCancel, new JsonObject
+            {
+                ["transferId"] = id, ["reason"] = ex is IOException io2 && IsDiskFull(io2) ? "NO_SPACE" : ReasonFor(ex),
+            });
         }
     }
 
