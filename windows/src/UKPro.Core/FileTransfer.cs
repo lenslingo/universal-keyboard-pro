@@ -177,7 +177,9 @@ public sealed class FileReceiver : IDisposable
 
     public static string SafeFileName(string name)
     {
-        var n = System.IO.Path.GetFileName(name.Replace('\\', '/'));
+        // strip any directory part ourselves (Path.GetFileName on Windows would treat "a:b" as drive "a:")
+        var n = name.Replace('\\', '/');
+        n = n[(n.LastIndexOf('/') + 1)..];
         foreach (var c in System.IO.Path.GetInvalidFileNameChars().Concat(['<', '>', ':', '"', '|', '?', '*']))
             n = n.Replace(c, '_');
         n = n.Trim().TrimEnd('.');
