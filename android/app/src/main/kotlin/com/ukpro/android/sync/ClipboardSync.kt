@@ -52,35 +52,42 @@ class ClipboardSync(private val context: Context) {
         if (clip == null || clip.itemCount == 0) return
         if (!manual && (!s.clipboardSync || s.paused)) return
         if (isSensitive(clip.description)) return
-        UkRuntime.io.execute { runCatching { handleLocal(clip) }.onFailure { UkRuntime.toast("Clipboard: ${it.message}") } }
+        // open clip URIs now, while the clipboard grant is fresh; the work itself runs in the background
+        val pinned = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }.associateWith { u -> runCatching { UriFileSource(context, u) }.getOrNull() }
+        UkRuntime.io.execute { runCatching { handleLocal(clip, pinned) }.onFailure { UkRuntime.toast("Clipboard: ${it.message}") } }
     }
 
     private fun isSensitive(d: ClipDescription?): Boolean =
         d?.extras?.getBoolean(if (Build.VERSION.SDK_INT >= 33) ClipDescription.EXTRA_IS_SENSITIVE else "android.content.extra.IS_SENSITIVE") == true
 
-    private fun handleLocal(clip: ClipData) {
+    private fun handleLocal(clip: ClipData, pinned: Map<Uri, UriFileSource?>) {
         val s = UkRuntime.settings.current
         val uris = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
         val desc = clip.description
         if (uris.isNotEmpty()) {
             val key = uris.map { it.toString() }.toSet()
             if (key == lastAppliedUris) { resolver.onLocalChange(lastAppliedHash ?: return); return } // our own write
-            val first = UriFileSource(context, uris[0])
+            val first = pinned[uris[0]] ?: UriFileSource(context, uris[0])
             if (uris.size == 1 && first.mime.startsWith("image/") && first.size <= MAX_IMAGE_BYTES) {
                 if (!s.clipboardImages) return
                 val bytes = first.open().use { it.readBytes() }
                 val stamp = resolver.onLocalChange(ClipboardResolver.hashBytes(bytes)) ?: return
                 remember(stamp, "image", "Image (${first.mime})", null, uris[0].toString())
-                for (c in UkRuntime.connectedHubs()) sendAsFile(c, MessageTypes.CLIPBOARD_IMAGE, stamp, UriFileSource(context, uris[0]))
+                // one cache copy of the image (≤ 32 MB, already in memory) so several laptops can stream it independently
+                val ext = first.mime.substringAfter('/', "png").take(5)
+                val f = File(context.cacheDir, "clipboard/out-${stamp.clipId}.$ext").apply { parentFile?.mkdirs(); writeBytes(bytes) }
+                first.close()
+                for (c in UkRuntime.connectedHubs()) sendAsFile(c, MessageTypes.CLIPBOARD_IMAGE, stamp, com.ukpro.core.LocalFileSource(f, first.mime))
                 return
             }
             if (!s.clipboardFiles) return
-            val sources = uris.map { UriFileSource(context, it) }
+            val sources = uris.map { pinned[it] ?: UriFileSource(context, it) }
             val hash = ClipboardResolver.hashFiles(sources.map { Triple(it.name, it.size, it.mime) })
             val stamp = resolver.onLocalChange(hash) ?: return
             outgoingFiles[stamp.clipId] = uris
             remember(stamp, "files", sources.joinToString { it.name }, null, uris.joinToString("\n"))
             val total = sources.sumOf { it.size }
+            sources.forEach { it.close() } // names/sizes only; each laptop opens its own stream in sendFiles
             val p = stamp.toPayload()
             p["files"] = sources.map { linkedMapOf<String, Any?>("name" to it.name, "size" to it.size) }
             p["auto"] = total <= AUTO_FILE_LIMIT
@@ -113,7 +120,8 @@ class ClipboardSync(private val context: Context) {
 
     private fun sendFiles(c: HubConnection, clipId: String) {
         val uris = outgoingFiles[clipId] ?: return
-        UkRuntime.io.execute { for (u in uris) c.transfers.sendFile(UriFileSource(context, u), purpose = "clipboard-file:$clipId") }
+        val srcs = uris.mapNotNull { u -> runCatching { UriFileSource(context, u) }.getOrNull() }
+        UkRuntime.io.execute { for (s in srcs) c.transfers.sendFile(s, purpose = "clipboard-file:$clipId") }
     }
 
     fun onFetch(c: HubConnection, clipId: String) = sendFiles(c, clipId)

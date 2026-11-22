@@ -21,26 +21,66 @@ import com.ukpro.core.TransferProgress
 import java.io.File
 import java.io.InputStream
 
-/** A content:// URI as a streamable source (never loaded into memory). */
-class UriFileSource(private val context: Context, private val uri: Uri) : FileSource {
+/**
+ * A content:// URI as a streamable source (never loaded into memory).
+ *
+ * The file descriptor is opened immediately, while the activity that received the URI (Share sheet,
+ * file picker) still holds the temporary read permission. Android revokes that permission when the
+ * activity finishes; an already-open descriptor stays valid, so the transfer can run in the background
+ * and resume later. Non-seekable streams (some cloud providers) are copied to the cache once.
+ */
+class UriFileSource(private val context: Context, private val uri: Uri) : FileSource, java.io.Closeable {
     override val name: String
     override val size: Long
     override val mime: String
+    private val pfd: android.os.ParcelFileDescriptor?
+    @Volatile private var spooled: File? = null
 
     init {
-        var n = uri.lastPathSegment ?: "file"; var s = -1L
-        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
-            if (c.moveToFirst()) {
-                c.getString(0)?.let { n = it }
-                if (!c.isNull(1)) s = c.getLong(1)
+        var n = uri.lastPathSegment?.substringAfterLast('/') ?: "file"; var s = -1L
+        runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    c.getString(0)?.let { n = it }
+                    if (!c.isNull(1)) s = c.getLong(1)
+                }
             }
         }
-        if (s < 0) s = context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: 0
-        name = n; size = s
-        mime = context.contentResolver.getType(uri) ?: MimeTypes.fromName(n)
+        pfd = try { context.contentResolver.openFileDescriptor(uri, "r") } catch (e: Exception) { null }
+        if (s < 0) s = pfd?.statSize?.takeIf { it >= 0 } ?: -1
+        name = n
+        mime = runCatching { context.contentResolver.getType(uri) }.getOrNull() ?: MimeTypes.fromName(n)
+        if (s < 0) s = spool().length() // unknown size (stream): copy once so size and re-reads are exact
+        size = s
     }
 
-    override fun open(): InputStream = context.contentResolver.openInputStream(uri) ?: throw java.io.IOException("cannot open $uri")
+    private fun seekableStream(): InputStream? {
+        val fd = pfd ?: return null
+        return try {
+            val fis = java.io.FileInputStream(fd.fileDescriptor)
+            fis.channel.position(0)
+            // do not close the shared descriptor when one pass is done (hash pass, then the send pass)
+            object : java.io.FilterInputStream(fis) { override fun close() {} }
+        } catch (e: Exception) { null }
+    }
+
+    private fun spool(): File {
+        spooled?.let { return it }
+        val f = File(context.cacheDir, "outgoing/${System.nanoTime()}-${name.replace('/', '_')}").apply { parentFile?.mkdirs() }
+        val input = pfd?.let { android.os.ParcelFileDescriptor.AutoCloseInputStream(it) } ?: context.contentResolver.openInputStream(uri)
+            ?: throw java.io.IOException("cannot open $uri")
+        input.use { i -> f.outputStream().use { o -> i.copyTo(o, 1 shl 16) } }
+        spooled = f
+        return f
+    }
+
+    override fun open(): InputStream =
+        spooled?.inputStream() ?: seekableStream() ?: spool().inputStream()
+
+    override fun close() {
+        try { pfd?.close() } catch (e: Exception) { }
+        spooled?.delete()
+    }
 }
 
 /**
@@ -50,11 +90,17 @@ class UriFileSource(private val context: Context, private val uri: Uri) : FileSo
  */
 class Transfers(private val context: Context) {
 
+    /** Must be called while the Share/picker activity is still alive: the files are opened right here. */
     fun sendUris(uris: List<Uri>, conn: HubConnection? = UkRuntime.activeConnection()) {
         val c = conn ?: run { UkRuntime.toast("No laptop connected"); return }
-        for (u in uris) UkRuntime.io.execute {
-            try { c.transfers.sendFile(UriFileSource(context, u)) }
-            catch (e: Exception) { UkRuntime.toast("Send failed: ${e.message}") }
+        val sources = uris.mapNotNull { u ->
+            try { UriFileSource(context, u) } catch (e: Exception) { UkRuntime.toast("Cannot read ${u.lastPathSegment}: ${e.message}"); null }
+        }
+        for (src in sources) UkRuntime.io.execute {
+            try {
+                val p = c.transfers.sendFile(src)
+                if (p.state == TransferProgress.State.FAILED) UkRuntime.toast("${p.name}: ${p.error ?: "failed"}")
+            } catch (e: Exception) { UkRuntime.toast("Send failed: ${e.message}") }
         }
     }
 

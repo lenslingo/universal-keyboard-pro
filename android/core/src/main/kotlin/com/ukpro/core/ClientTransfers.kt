@@ -73,11 +73,19 @@ class ClientTransfers(
                     o.accepted = CompletableFuture()
                 } catch (e: ProtocolException) {
                     p.error = e.message; set(p, TransferProgress.State.FAILED); return p
+                } catch (e: RuntimeException) {
+                    // e.g. SecurityException: the app that shared the file revoked read access — never stay stuck
+                    p.error = (e.javaClass.simpleName + ": " + (e.message ?: "")).take(200)
+                    set(p, TransferProgress.State.FAILED); return p
                 }
             }
+            if (p.error == null) p.error = "laptop did not respond"
             set(p, TransferProgress.State.FAILED)
             return p
-        } finally { outgoing.remove(tx.transferId) }
+        } finally {
+            outgoing.remove(tx.transferId)
+            (source as? java.io.Closeable)?.let { try { it.close() } catch (e: Exception) { } }
+        }
     }
 
     private fun runOnce(tx: FileSender, o: Outgoing) {

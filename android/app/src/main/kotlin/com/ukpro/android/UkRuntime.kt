@@ -221,7 +221,8 @@ object UkRuntime : HubEvents {
         if (p.state == TransferProgress.State.COMPLETED || p.state == TransferProgress.State.FAILED || p.state == TransferProgress.State.CANCELLED) {
             transferList.value = connections.values.flatMap { it.transfers.active }.filter { it.transferId != p.transferId }
             scope.launch {
-                db.transfers().put(TransferEntity(p.transferId, p.name, p.size, p.incoming, p.state.name,
+                db.transfers().put(TransferEntity(p.transferId, p.name, p.size, p.incoming,
+                    p.state.name + (p.error?.let { " — $it" } ?: ""),
                     p.finalFile?.absolutePath, conn.name, System.currentTimeMillis()))
             }
         }

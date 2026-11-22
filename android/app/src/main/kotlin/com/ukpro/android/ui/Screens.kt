@@ -288,7 +288,7 @@ fun FilesScreen() {
             UkCard("${if (t.incoming) "Receiving" else "Sending"} · ${t.state}") {
                 Text("${t.name.take(48)} · ${"%.1f".format(t.size / 1048576.0)} MB")
                 LinearProgressIndicator(progress = { t.fraction.toFloat() }, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp))
-                Text("%.1f MB/s".format(t.bytesPerSecond / 1048576))
+                Text("%.1f MB/s".format(t.bytesPerSecond / 1048576) + (t.error?.let { "  ·  $it" } ?: ""))
                 if (!t.incoming) Row {
                     TextButton(onClick = { conn?.transfers?.pause(t.transferId, t.state != com.ukpro.core.TransferProgress.State.PAUSED) }) { Text("Pause/Resume") }
                     TextButton(onClick = { conn?.transfers?.cancel(t.transferId) }) { Text("Cancel") }
